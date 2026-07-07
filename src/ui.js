@@ -84,7 +84,7 @@ export class UI {
     const root = el('div'); root.id = 'ui'; document.body.appendChild(root); this.root = root;
     this._buildHUD(); this._buildToolbar(); this._buildPanels(); this._buildFishCard();
     this.toastEl = el('div', 'toast'); root.appendChild(this.toastEl);
-    this.hint = el('div', 'hint', 'Tap a fish to learn about it • Drag on the glass to wipe algae'); root.appendChild(this.hint);
+    this.hint = el('div', 'hint', 'Tap a fish to follow it • Pinch to zoom • 🔭 sees the whole tank'); root.appendChild(this.hint);
     setTimeout(() => { this.hint.style.opacity = 0; }, 9000);
     this.shopFilter = 'all';
   }
@@ -108,6 +108,7 @@ export class UI {
       const b = el('button', 'tool', emoji); b.onclick = fn;
       w.append(b, el('div', 'tool-cap', label)); bar.appendChild(w); return b;
     };
+    mk('🔭', 'View', () => this.o.onFitView && this.o.onFitView());
     mk('🍽️', 'Feed', () => this.toggle('feed'));
     mk('🛒', 'Shop', () => { this.buildCatalog(); this.toggle('shop'); });
     mk('🧽', 'Care', () => { this.refreshCare(); this.toggle('care'); });

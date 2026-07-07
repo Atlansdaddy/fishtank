@@ -58,6 +58,7 @@ scene.environment = pmrem.fromScene(envScene, 0.04).texture;
 
 // ---- world systems ----
 const tankView = buildTank(scene, renderer);
+let fogBase = WATER_THEMES.fresh.fogDensity;
 const sim = new CareSim();
 const food = new FoodSystem(scene);
 const swarm = new Swarm(scene, sim, food);
@@ -134,12 +135,14 @@ const ui = new UI({
   onWaterChange: () => { sim.waterChange(); sim.save(); ui.refreshHUD(); ui.toast('💧 Fresh, clean water!'); },
   onScrub: () => { sim.scrubAlgae(1); sim.save(); ui.refreshHUD(); ui.toast('🧽 Sparkling glass!'); },
   onSwitchTank: () => switchTank(sim.state.current === 'fresh' ? 'salt' : 'fresh'),
+  onFitView: () => fitWholeTank(),
   onRename: (id, name) => { const f = sim._index.get(id); if (f) { f.name = name; sim.save(); } },
 });
 
 function switchTank(which) {
   sim.switchTank(which);
   tankView.setTheme(which);
+  fogBase = WATER_THEMES[which].fogDensity;
   buildDecor(which);
   rebuildAgents();
   ui.refreshHUD(); ui.closePanels();
@@ -162,6 +165,7 @@ if (!sim.load()) {
 // offline decay + welcome-back coins
 const offlineHours = sim.applyOffline();
 tankView.setTheme(sim.state.current);
+fogBase = WATER_THEMES[sim.state.current].fogDensity;
 buildDecor(sim.state.current);
 rebuildAgents();
 
@@ -196,35 +200,67 @@ if (offlineHours > 0.2) {
 }
 ui.refreshHUD();
 
-// ---- input: tap to identify, drag to look / wipe glass ----
+// ---- camera controller: pinch zoom, drag orbit, tap-to-follow ----
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
-let ptr = { down: false, x: 0, y: 0, moved: 0, startX: 0, startY: 0 };
-let camAz = 0, camEl = 0; // orbit offsets
+const cam = {
+  az: 0, el: 0.12,
+  radius: 130, targetRadius: 130,
+  minR: 13, fitR: 200,                 // fitR recomputed in resize() to frame the whole tank
+  target: new THREE.Vector3(0, TANK.H * 0.5, 0),
+  look: new THREE.Vector3(0, TANK.H * 0.5, 0),
+  follow: null,
+};
+const pointers = new Map();            // pointerId -> {x,y}
+let pinchPrev = 0, gestureMulti = false, gestureMoved = 0, gestureStart = null;
 
-canvas.addEventListener('pointerdown', (e) => { ptr.down = true; ptr.x = ptr.startX = e.clientX; ptr.y = ptr.startY = e.clientY; ptr.moved = 0; });
+canvas.addEventListener('pointerdown', (e) => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 1) { gestureMoved = 0; gestureMulti = false; gestureStart = { x: e.clientX, y: e.clientY }; }
+  if (pointers.size === 2) { gestureMulti = true; pinchPrev = pinchDistance(); }
+});
 canvas.addEventListener('pointermove', (e) => {
-  if (!ptr.down) return;
-  const dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
-  ptr.moved += Math.abs(dx) + Math.abs(dy);
-  ptr.x = e.clientX; ptr.y = e.clientY;
-  const s = sim.summary();
-  if (s.algae > 0.2) {
-    // wipe the glass — dragging clears algae where you rub
-    sim.scrubAlgae(0.015);
-    spawnSparkle(e.clientX, e.clientY);
-    ui.refreshHUD();
+  const p = pointers.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  gestureMoved += Math.abs(dx) + Math.abs(dy);
+
+  if (pointers.size >= 2) {             // pinch to zoom
+    const d = pinchDistance();
+    if (pinchPrev > 0) cam.targetRadius = THREE.MathUtils.clamp(cam.targetRadius * (pinchPrev / d), cam.minR, cam.fitR);
+    pinchPrev = d;
+    return;
+  }
+  // single finger: wipe algae if dirty, else orbit
+  if (sim.summary().algae > 0.2) {
+    sim.scrubAlgae(0.015); spawnSparkle(e.clientX, e.clientY); ui.refreshHUD();
   } else {
-    camAz = THREE.MathUtils.clamp(camAz + dx * 0.005, -0.9, 0.9);
-    camEl = THREE.MathUtils.clamp(camEl - dy * 0.004, -0.35, 0.5);
+    cam.az = THREE.MathUtils.clamp(cam.az + dx * 0.006, -1.2, 1.2);
+    cam.el = THREE.MathUtils.clamp(cam.el - dy * 0.005, -0.25, 0.75);
   }
 });
-canvas.addEventListener('pointerup', (e) => {
-  ptr.down = false;
-  if (ptr.moved < 8) tapIdentify(e.clientX, e.clientY);
-});
+function endPointer(e) {
+  const had = pointers.has(e.pointerId);
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchPrev = 0;
+  if (had && pointers.size === 0 && !gestureMulti && gestureMoved < 10 && gestureStart)
+    tapSelect(gestureStart.x, gestureStart.y);
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', (e) => {   // desktop / trackpad zoom
+  e.preventDefault();
+  cam.targetRadius = THREE.MathUtils.clamp(cam.targetRadius * (1 + Math.sign(e.deltaY) * 0.12), cam.minR, cam.fitR);
+}, { passive: false });
 
-function tapIdentify(px, py) {
+function pinchDistance() {
+  const pts = [...pointers.values()];
+  if (pts.length < 2) return 0;
+  return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+}
+
+// Tap: select+follow+zoom an animal, or tap empty water to release & frame the tank.
+function tapSelect(px, py) {
   ndc.x = (px / innerWidth) * 2 - 1; ndc.y = -(py / innerHeight) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
   const hits = raycaster.intersectObjects(swarm.agents.map(a => a.obj), true);
@@ -233,11 +269,18 @@ function tapIdentify(px, py) {
     while (o && !o.userData.agentRef) o = o.parent;
     if (o && o.userData.agentRef) {
       const a = o.userData.agentRef;
+      cam.follow = a;
+      const size = a.obj.userData.worldScale * (a.bodyCm || 5);
+      cam.targetRadius = THREE.MathUtils.clamp(size * 3.2 + 10, cam.minR, 46);  // zoom in on it
       const rec = sim._index.get(a.instId);
-      if (rec) { ui.showFishCard(rec, SPECIES[rec.sp]); a.startle = 0.6; }
+      if (rec) { ui.showFishCard(rec, SPECIES[rec.sp]); a.startle = 0.4; }
     }
+  } else {
+    cam.follow = null;                  // tapped empty water: stop following
+    ui.hideFishCard();
   }
 }
+function fitWholeTank() { cam.follow = null; cam.targetRadius = cam.fitR; cam.el = 0.12; ui.hideFishCard(); }
 
 // sparkle overlay for wiping feedback
 const sparkleLayer = document.createElement('div');
@@ -258,8 +301,17 @@ function spawnSparkle(x, y) {
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  // Distance needed to frame the whole tank (worst of width/height fit, portrait or landscape)
+  const vHalf = Math.tan((camera.fov * Math.PI / 180) / 2);
+  const hHalf = vHalf * camera.aspect;
+  const dV = (TANK.H * 0.62) / vHalf;
+  const dW = (TANK.W * 0.60) / hHalf;
+  cam.fitR = Math.min(320, Math.max(90, dV, dW) + 12);
+  if (cam.targetRadius > cam.fitR) cam.targetRadius = cam.fitR;
 }
-addEventListener('resize', resize); resize();
+addEventListener('resize', resize);
+resize();
+cam.radius = cam.targetRadius = cam.fitR;   // start framed on the whole tank
 
 // ---- persistence on background ----
 let saveTimer = 0;
@@ -290,13 +342,21 @@ function frame() {
     ui.refreshHUD();
   }
 
-  // camera: base + gentle auto drift + user orbit
-  const az = camAz + Math.sin(t * 0.06) * 0.06;
-  const rad = TANK.D * 1.18;
-  camera.position.x = Math.sin(az) * rad;
-  camera.position.z = Math.cos(az) * rad;
-  camera.position.y = TANK.H * 0.5 + camEl * 40 + Math.sin(t * 0.08) * 1.5;
-  camera.lookAt(camTarget);
+  // camera: orbit around the followed animal or the tank centre; smooth zoom
+  if (cam.follow && cam.follow.alive) cam.target.copy(cam.follow.pos);
+  else { cam.follow = null; cam.target.set(0, TANK.H * 0.5, 0); }
+  cam.look.lerp(cam.target, cam.follow ? 0.12 : 0.05);
+  cam.radius += (cam.targetRadius - cam.radius) * 0.10;
+  const az = cam.az + (cam.follow ? 0 : Math.sin(t * 0.05) * 0.05);
+  const ce = Math.cos(cam.el);
+  camera.position.set(
+    cam.look.x + Math.sin(az) * cam.radius * ce,
+    cam.look.y + Math.sin(cam.el) * cam.radius + (cam.follow ? 0 : Math.sin(t * 0.08) * 1.2),
+    cam.look.z + Math.cos(az) * cam.radius * ce
+  );
+  camera.lookAt(cam.look);
+  // thin the fog when zoomed out so the whole tank is visible, thicken up close
+  if (scene.fog) scene.fog.density = fogBase * THREE.MathUtils.clamp(70 / cam.radius, 0.32, 1.35);
 
   // periodic HUD refresh + coin trickle for good care
   hudTimer += dt; if (hudTimer > 1.2) { hudTimer = 0; ui.refreshHUD(); }
@@ -314,4 +374,4 @@ function frame() {
 frame();
 
 // expose a little for debugging
-window.__tank = { sim, swarm, food, SPECIES, switchTank, ui };
+window.__tank = { sim, swarm, food, SPECIES, switchTank, ui, cam, camera, fitWholeTank };
