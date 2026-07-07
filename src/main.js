@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { TANK, BOUNDS, WATER_THEMES, FOODS, SIM } from './constants.js';
 import { buildTank } from './tank.js';
 import { buildFish } from './fishbuilder.js';
+import { buildInvert } from './invertbuilder.js';
 import { CareSim } from './sim.js';
 import { FoodSystem } from './food.js';
 import { Swarm, Agent } from './behavior.js';
@@ -95,8 +96,9 @@ function buildDecor(type) {
 // ---- agent (fish) spawning for the active tank ----
 function makeAgent(rec) {
   const spec = SPECIES[rec.sp]; if (!spec) return null;
-  const obj = buildFish(spec, WATER_THEMES[sim.state.current]);
-  obj.userData.mat.envMapIntensity = 1.0;
+  const isInv = (spec.kind || 'fish') === 'invert';
+  const obj = isInv ? buildInvert(spec) : buildFish(spec, WATER_THEMES[sim.state.current]);
+  if (!isInv) obj.userData.mat.envMapIntensity = 1.0;
   const a = new Agent(spec, obj, rec.id);
   a._dietSet = new Set(spec.diet || ['flake']);
   a._schools = (spec.kind || 'fish') === 'fish' && (spec.schooling === 'tight' || spec.minSchool >= 4);

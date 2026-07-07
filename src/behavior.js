@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BOUNDS, TANK } from './constants.js';
 import { animateFishVisual } from './fishbuilder.js';
+import { animateInvertVisual } from './invertbuilder.js';
 
 // Fish/invert AI: boid schooling, zone preference, wandering, food seeking,
 // feeding-time congregation at the front glass, and predator/prey hunt+flee.
@@ -38,6 +39,7 @@ export class Agent {
     this.swimAmt = 1;
     this.turnRate = 0;
     this.alive = true;
+    this.isInvert = this.kind === 'invert';
     this.sessile = spec.zone === 'fixed' || spec.archetype === 'anemone' || spec.archetype === 'featherduster';
     // proxy "physical size" for predator/prey (cm), scaled by visual too
     this.bodyCm = spec.adultSizeCm || 5;
@@ -146,7 +148,7 @@ export class Swarm {
       }
 
       // ---- Feeding-time congregation at the front glass ----
-      if (!hunting && this.begging && hunger > 0.45 && this.food.count() === 0) {
+      if (!hunting && !a.isInvert && this.begging && hunger > 0.45 && this.food.count() === 0) {
         _a.copy(this.playerFocus).sub(a.pos);
         _a.y += Math.sin(time * 2 + a.wander) * 3;
         _steer.addScaledVector(_a.normalize(), a.maxSpeed * 1.2);
@@ -189,13 +191,17 @@ export class Swarm {
         // face travel direction: model nose is +x. For a Y-rotation of `a`, local
         // +x points to world (cos a, 0, -sin a), so a = atan2(-dz, dx).
         const yaw = Math.atan2(-dir.z, dir.x);
-        const pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -0.6, 0.6));
         a.obj.rotation.set(0, yaw, 0);
-        a.obj.rotateZ(pitch);
+        if (!a.isInvert) a.obj.rotateZ(Math.asin(THREE.MathUtils.clamp(dir.y, -0.6, 0.6)));
       }
       a.swimAmt = THREE.MathUtils.clamp(a.vel.length() / a.cruise, 0.35, 2.2);
-      animateFishVisual(a.obj, dt, time, a.swimAmt, a.turnRate);
-      a.obj.userData.mat.userData.uniforms.sick.value = health < 0.4 ? (0.4 - health) / 0.4 : 0;
+      if (a.isInvert) {
+        animateInvertVisual(a.obj, dt, time);
+      } else {
+        animateFishVisual(a.obj, dt, time, a.swimAmt, a.turnRate);
+        const mu = a.obj.userData.mat?.userData?.uniforms;
+        if (mu) mu.sick.value = health < 0.4 ? (0.4 - health) / 0.4 : 0;
+      }
     }
   }
 
