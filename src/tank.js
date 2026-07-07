@@ -57,13 +57,13 @@ export function buildTank(scene, renderer) {
   // ----- Caustics: an animated light-pattern projected onto sand -----
   const causticMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    uniforms: { time: { value: 0 } },
+    uniforms: { time: { value: 0 }, day: { value: 1 } },
     vertexShader: `
       varying vec2 vUv;
       void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
     `,
     fragmentShader: `
-      varying vec2 vUv; uniform float time;
+      varying vec2 vUv; uniform float time, day;
       void main(){
         vec2 uv = vUv * 8.0;
         float c = 0.0;
@@ -73,7 +73,7 @@ export function buildTank(scene, renderer) {
           float d = sin(q.x + time) * sin(q.y + time*0.9);
           c += smoothstep(0.7, 1.0, d);
         }
-        gl_FragColor = vec4(vec3(1.0), clamp(c,0.0,1.0) * 0.16);
+        gl_FragColor = vec4(vec3(1.0), clamp(c,0.0,1.0) * 0.16 * (0.1 + 0.9*day));
       }
     `,
   });
@@ -92,8 +92,15 @@ export function buildTank(scene, renderer) {
   const motes = buildMotes();
   group.add(motes);
 
+  // Sun shafts wobbling down from the surface + an airstone bubble column
+  const shafts = buildShafts();
+  group.add(shafts);
+  const bubbles = buildBubbles();
+  group.add(bubbles);
+
+  let lastT = 0;
   return {
-    group, sand, sandMat, surface, surfMat, caustics, causticMat, motes,
+    group, sand, sandMat, surface, surfMat, caustics, causticMat, motes, shafts, bubbles,
     setTheme(waterType) {
       const th = WATER_THEMES[waterType];
       scene.fog = new THREE.FogExp2(th.fogColor, th.fogDensity);
@@ -102,9 +109,17 @@ export function buildTank(scene, renderer) {
       surfMat.color.set(th.surface);
       backMat.color.set(th.deep).multiplyScalar(0.7);
     },
+    setDay(day) {
+      causticMat.uniforms.day.value = day;
+      shafts.userData.mat.uniforms.day.value = day;
+      surfMat.opacity = 0.28 * (0.35 + 0.65 * day);
+      motes.material.opacity = 0.35 * (0.3 + 0.7 * day);
+    },
     update(t) {
+      const dt = Math.min(0.05, t - lastT); lastT = t;
       surfMat.userData.uniforms.time.value = t;
-      causticMat.userData.uniforms.time.value = t;
+      causticMat.uniforms.time.value = t;
+      shafts.userData.mat.uniforms.time.value = t;
       const mp = motes.geometry.attributes.position;
       for (let i = 1; i < mp.count * 3; i += 3) {
         // slow upward drift, wrap
@@ -112,8 +127,77 @@ export function buildTank(scene, renderer) {
         if (motes.geometry.attributes.position.array[i] > TANK.WATER_LEVEL) motes.geometry.attributes.position.array[i] = 2;
       }
       mp.needsUpdate = true;
+      // bubbles: rise with a wobble, pop at the surface, restart at the stone
+      const bp = bubbles.geometry.attributes.position;
+      const seeds = bubbles.userData.seeds;
+      for (let i = 0; i < bp.count; i++) {
+        let y = bp.getY(i) + (10 + seeds[i] * 6) * dt;
+        if (y > TANK.WATER_LEVEL - 1) y = TANK.SAND_H + Math.random() * 2;
+        bp.setY(i, y);
+        bp.setX(i, bubbles.userData.x + Math.sin(t * 2.2 + seeds[i] * 20) * (0.4 + y * 0.03));
+        bp.setZ(i, bubbles.userData.z + Math.cos(t * 1.7 + seeds[i] * 17) * (0.4 + y * 0.025));
+      }
+      bp.needsUpdate = true;
     },
   };
+}
+
+// Volumetric-look light shafts: a few additive planes swaying under the surface.
+function buildShafts() {
+  const g = new THREE.Group();
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { time: { value: 0 }, day: { value: 1 } },
+    vertexShader: `
+      varying vec2 vUv; uniform float time;
+      void main(){
+        vUv = uv;
+        vec3 p = position;
+        p.x += sin(time*0.35 + position.y*0.05) * 2.5 * uv.y;  // sway more near surface
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }`,
+    fragmentShader: `
+      varying vec2 vUv; uniform float time, day;
+      void main(){
+        float edge = smoothstep(0.0, 0.35, vUv.x) * smoothstep(1.0, 0.65, vUv.x);
+        float vert = smoothstep(0.02, 0.3, vUv.y);              // fade out near the sand
+        float flicker = 0.7 + 0.3 * sin(time*0.8 + vUv.x*7.0);
+        gl_FragColor = vec4(vec3(0.72, 0.88, 1.0), edge * vert * flicker * 0.10 * day);
+      }`,
+  });
+  for (let i = 0; i < 5; i++) {
+    const w = 7 + (i * 37 % 9);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, TANK.WATER_LEVEL - 6), mat);
+    m.position.set(-TANK.W * 0.42 + i * TANK.W * 0.2 + (i * 13 % 7) - 3, TANK.WATER_LEVEL * 0.52, -TANK.D * 0.22 + (i % 2) * TANK.D * 0.3);
+    m.rotation.z = 0.10 + (i * 29 % 10) * 0.012;   // slanted like low sun through water
+    m.rotation.y = ((i * 17 % 10) - 5) * 0.05;
+    g.add(m);
+  }
+  g.userData.mat = mat;
+  return g;
+}
+
+// A little airstone in the back corner blowing a wobbly column of bubbles.
+function buildBubbles() {
+  const N = 42;
+  const x = -TANK.W / 2 + 14, z = -TANK.D / 2 + 12;
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(N * 3);
+  const seeds = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    seeds[i] = (i * 0.618 + 0.13) % 1;
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = TANK.SAND_H + seeds[i] * (TANK.WATER_LEVEL - TANK.SAND_H);
+    pos[i * 3 + 2] = z;
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const m = new THREE.PointsMaterial({
+    color: 0xdff4ff, size: 1.1, transparent: true, opacity: 0.55,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  });
+  const pts = new THREE.Points(g, m);
+  pts.userData = { seeds, x, z };
+  return pts;
 }
 
 function whiteTex() {

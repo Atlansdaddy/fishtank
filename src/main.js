@@ -56,6 +56,28 @@ const envLight = new THREE.Mesh(new THREE.SphereGeometry(100, 16, 16), new THREE
 envScene.add(envLight);
 scene.environment = pmrem.fromScene(envScene, 0.04).texture;
 
+// ---- day/night driven by the real clock: dawn 6-8, day, dusk 19-21, night ----
+let hourOverride = null;                 // test hook
+function rawDayFactor() {
+  const d = new Date();
+  const h = hourOverride ?? (d.getHours() + d.getMinutes() / 60);
+  if (h < 6 || h >= 21) return 0;
+  if (h < 8) return (h - 6) / 2;
+  if (h < 19) return 1;
+  return 1 - (h - 19) / 2;
+}
+let df = rawDayFactor();                 // smoothed day factor, 1=day 0=night
+const dayNight = {
+  sunDay: new THREE.Color(0xffffff), sunNight: new THREE.Color(0x7fa8e0),
+  fogDay: new THREE.Color(), fogNight: new THREE.Color(),
+  bgDay: new THREE.Color(), bgNight: new THREE.Color(),
+};
+function refreshThemeColors() {
+  const th = WATER_THEMES[sim.state.current];
+  dayNight.fogDay.set(th.fogColor); dayNight.fogNight.set(th.fogColor).multiplyScalar(0.16);
+  dayNight.bgDay.set(th.deep); dayNight.bgNight.set(th.deep).multiplyScalar(0.14);
+}
+
 // ---- world systems ----
 const tankView = buildTank(scene, renderer);
 let fogBase = WATER_THEMES.fresh.fogDensity;
@@ -142,6 +164,7 @@ const ui = new UI({
 function switchTank(which) {
   sim.switchTank(which);
   tankView.setTheme(which);
+  refreshThemeColors();
   fogBase = WATER_THEMES[which].fogDensity;
   buildDecor(which);
   rebuildAgents();
@@ -165,6 +188,7 @@ if (!sim.load()) {
 // offline decay + welcome-back coins
 const offlineHours = sim.applyOffline();
 tankView.setTheme(sim.state.current);
+refreshThemeColors();
 fogBase = WATER_THEMES[sim.state.current].fogDensity;
 buildDecor(sim.state.current);
 rebuildAgents();
@@ -328,6 +352,18 @@ function frame() {
   const dt = Math.min(0.05, clock.getDelta());
   const t = clock.elapsedTime;
 
+  // day/night lighting: dim to blue moonlight after dark, warm up at dawn
+  df += (rawDayFactor() - df) * Math.min(1, dt * 0.8);
+  sun.intensity = 0.18 + 2.0 * df;
+  sun.color.copy(dayNight.sunNight).lerp(dayNight.sunDay, df);
+  hemi.intensity = 0.14 + 0.56 * df;
+  fill.intensity = 0.12 + 0.38 * df;
+  if (scene.fog) scene.fog.color.copy(dayNight.fogNight).lerp(dayNight.fogDay, df);
+  if (scene.background && scene.background.isColor)
+    scene.background.copy(dayNight.bgNight).lerp(dayNight.bgDay, df);
+  swarm.nightFactor = 1 - df;
+  if (tankView.setDay) tankView.setDay(df);
+
   const rotting = food.update(dt);
   sim.update(dt, rotting);
   swarm.update(dt, t);
@@ -380,4 +416,5 @@ function frame() {
 frame();
 
 // expose a little for debugging
-window.__tank = { sim, swarm, food, SPECIES, switchTank, ui, cam, camera, fitWholeTank };
+window.__tank = { sim, swarm, food, SPECIES, switchTank, ui, cam, camera, fitWholeTank,
+  setHour: (h) => { hourOverride = h; }, dayFactor: () => df };

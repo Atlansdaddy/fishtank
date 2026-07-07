@@ -10,6 +10,8 @@ const V = () => new THREE.Vector3();
 const _a = V(), _b = V(), _c = V(), _sep = V(), _ali = V(), _coh = V(), _steer = V();
 const _cp = V(), _cn = V(), _cf = V(), _cr = V();
 const _cm = new THREE.Matrix4();
+const _cq = new THREE.Quaternion();
+const _ce = new THREE.Euler();
 
 // ---- benthic crawler locomotion (snails, shrimp, crabs, stars, urchins) ----
 // Inverts don't swim; they crawl glued to a surface. Each surface pins one axis
@@ -61,6 +63,13 @@ export class Agent {
     this.alive = true;
     this.isInvert = this.kind === 'invert';
     this.sessile = spec.zone === 'fixed' || spec.archetype === 'anemone' || spec.archetype === 'featherduster';
+    // circadian rhythm: nocturnal species wake at night, everyone else winds down
+    this.nocturnal = spec.archetype === 'pleco' || spec.archetype === 'loach' || (spec.tags || []).includes('nocturnal');
+    this.bottomDweller = spec.zone === 'bottom' || spec.zone === 'glass';
+    this.rest = 0;          // seconds left resting on the sand
+    this.glass = 0;         // seconds left suckered onto the glass (plecos)
+    this.glassSurf = null;
+    this.yaw = 0;
     // Benthic inverts crawl surfaces instead of swimming. Snails & stars also climb glass.
     this.crawler = this.isInvert && !this.sessile;
     this.climber = this.crawler && (spec.archetype === 'snail' || spec.archetype === 'star');
@@ -106,6 +115,7 @@ export class Swarm {
     this.agents = [];
     this.begging = false;   // set true briefly when app (re)opened & fish hungry
     this.begTimer = 0;
+    this.nightFactor = 0;   // 0 = full day, 1 = deep night (set by main loop)
     this.playerFocus = new THREE.Vector3(0, BOUNDS.maxY - 6, BOUNDS.maxZ); // front-top glass
   }
 
@@ -151,6 +161,11 @@ export class Swarm {
 
       const hunger = this.sim.hunger(a.instId);   // 0 fed .. 1 starving
       const health = this.sim.health(a.instId);
+      const nf = this.nightFactor;
+
+      // ---- sleeping/resting/glass-sitting episodes ----
+      if (this._restLogic(a, dt, time, hunger, health)) continue;
+
       _steer.set(0, 0, 0);
 
       // ---- Predator: hunt prey ----
@@ -196,8 +211,8 @@ export class Swarm {
         }
       }
 
-      // ---- Feeding-time congregation at the front glass ----
-      if (!hunting && !a.isInvert && this.begging && hunger > 0.45 && this.food.count() === 0) {
+      // ---- Feeding-time congregation at the front glass (not at deep night) ----
+      if (!hunting && !a.isInvert && this.begging && hunger > 0.45 && nf < 0.7 && this.food.count() === 0) {
         _a.copy(this.playerFocus).sub(a.pos);
         _a.y += Math.sin(time * 2 + a.wander) * 3;
         _steer.addScaledVector(_a.normalize(), a.maxSpeed * 1.2);
@@ -206,8 +221,9 @@ export class Swarm {
       // ---- Boids (same-species schooling) ----
       if (a._schools) this._boids(a, _steer);
 
-      // ---- Zone preference (vertical band) ----
-      const targetY = a.zoneYbase + Math.sin(time * 0.3 + a.wander) * 3;
+      // ---- Zone preference (vertical band); diurnal fish drift low at night ----
+      const nightSink = a.nocturnal ? 0 : nf * Math.max(0, a.zoneYbase - BOUNDS.minY - 2) * 0.6;
+      const targetY = a.zoneYbase - nightSink + Math.sin(time * 0.3 + a.wander) * 3;
       _steer.y += (targetY - a.pos.y) * 0.6;
 
       // ---- Wander ----
@@ -218,15 +234,19 @@ export class Swarm {
       // ---- Soft walls ----
       this._avoidWalls(a, _steer);
 
-      // Sick/weak fish move sluggishly
+      // Sick/weak fish move sluggishly; circadian activity scales the pace,
+      // but fish actively chasing food or fleeing don't dawdle
       const vigor = 0.35 + 0.65 * health;
+      let activity = a.nocturnal ? (0.35 + 0.75 * nf) : (1 - 0.70 * nf);
+      if (a.food || hunting || a.startle > 0.1) activity = Math.max(activity, 0.85);
 
       // integrate
       a.vel.addScaledVector(_steer, dt * 1.8);
-      const speedCap = a.maxSpeed * vigor * (a.startle > 0 ? 2.2 : 1);
+      const speedCap = a.maxSpeed * vigor * activity * (a.startle > 0 ? 2.2 : 1);
       if (a.vel.length() > speedCap) a.vel.setLength(speedCap);
       // minimum forward drive so fish keep moving
-      if (a.vel.length() < a.cruise * 0.4 * vigor) a.vel.setLength(a.cruise * 0.4 * vigor);
+      const minDrive = a.cruise * 0.4 * vigor * activity;
+      if (a.vel.length() < minDrive) a.vel.setLength(minDrive);
 
       const prevDir = _b.copy(a.vel).normalize();
       a.pos.addScaledVector(a.vel, dt);
@@ -240,6 +260,7 @@ export class Swarm {
         // face travel direction: model nose is +x. For a Y-rotation of `a`, local
         // +x points to world (cos a, 0, -sin a), so a = atan2(-dz, dx).
         const yaw = Math.atan2(-dir.z, dir.x);
+        a.yaw = yaw;
         a.obj.rotation.set(0, yaw, 0);
         if (!a.isInvert) a.obj.rotateZ(Math.asin(THREE.MathUtils.clamp(dir.y, -0.6, 0.6)));
       }
@@ -319,6 +340,67 @@ export class Swarm {
     a.pos.z = THREE.MathUtils.clamp(a.pos.z, BOUNDS.minZ, BOUNDS.maxZ);
   }
 
+  _sickUniform(a, health) {
+    const mu = a.obj.userData.mat?.userData?.uniforms;
+    if (mu) mu.sick.value = health < 0.4 ? (0.4 - health) / 0.4 : 0;
+  }
+
+  // Sleep/rest states. Returns true if the agent is handled for this frame.
+  // Corys & other bottom-dwellers settle on the sand (mostly at their sleepy
+  // time of day); plecos sucker onto the glass. Hunger, food, or a scare wakes.
+  _restLogic(a, dt, time, hunger, health) {
+    const nf = this.nightFactor || 0;
+    const wake = a.startle > 0.25 || hunger > 0.85 || (this.food.count() > 0 && hunger > 0.2);
+
+    if (a.glass > 0) {                      // pleco suckered onto the glass
+      if (wake) { a.glass = 0; a.glassSurf = null; return false; }
+      a.glass -= dt;
+      const S = SURFACES[a.glassSurf];
+      a.pos[S.pin] = S.val;                 // hold against the pane
+      a.vel.set(0, 0, 0);
+      _cf.copy(a.glassHeading);
+      _cn.copy(S.normal);                   // belly to glass: local up = pane normal
+      _cr.copy(_cf).cross(_cn).normalize();
+      _cm.makeBasis(_cf, _cn, _cr);
+      a.obj.quaternion.slerp(_cq.setFromRotationMatrix(_cm), Math.min(1, dt * 4));
+      animateFishVisual(a.obj, dt, time, 0.1, 0);
+      this._sickUniform(a, health);
+      return true;
+    }
+
+    if (a.rest > 0) {                       // resting on the sand
+      if (wake) { a.rest = 0; return false; }
+      a.rest -= dt;
+      a.vel.multiplyScalar(1 - Math.min(1, dt * 3));
+      a.pos.y += ((TANK.SAND_H + 0.8) - a.pos.y) * Math.min(1, dt * 1.5);
+      // settle level, keeping the direction it was facing
+      a.obj.quaternion.slerp(_cq.setFromEuler(_ce.set(0, a.yaw, 0)), Math.min(1, dt * 2.5));
+      animateFishVisual(a.obj, dt, time, 0.08, 0);
+      this._sickUniform(a, health);
+      return true;
+    }
+
+    // chance to begin a rest episode, weighted toward this fish's sleepy hours
+    if (a.eatCooldown === 0 && hunger < 0.75 && a.startle < 0.05 && this.food.count() === 0) {
+      const sleepy = a.nocturnal ? (1 - nf) : nf;
+      if (a.spec.archetype === 'pleco' && Math.random() < dt * (0.012 + 0.05 * sleepy)) {
+        const w = ['front', 'back', 'left', 'right'][Math.floor(Math.random() * 4)];
+        const S = SURFACES[w];
+        a.glassSurf = w; a.glass = 25 + Math.random() * 55;
+        a.pos[S.pin] = S.val;               // plecos dart to the glass in a blink
+        clampCrawl(a.pos); a.pos[S.pin] = S.val;
+        _cf.set(0, 0, 0); _cf[S.a] = Math.random() - 0.5; _cf[S.b] = 0.7 + Math.random() * 0.3;
+        a.glassHeading = _cf.clone().normalize();
+        return true;
+      }
+      if (a.bottomDweller && a.spec.archetype !== 'pleco' && Math.random() < dt * (0.01 + 0.06 * sleepy)) {
+        a.rest = 6 + Math.random() * 12;
+        return true;
+      }
+    }
+    return false;
+  }
+
   _animateSessile(a, time) {
     // anemones & feather dusters sway tentacles; handled by a small vertex wobble
     a.obj.rotation.y = Math.sin(time * 0.4 + a.wander) * 0.05;
@@ -362,7 +444,9 @@ export class Swarm {
     const dist = _cp.length();
     if (dist > 1e-3) {
       _cp.normalize();
-      const spd = a.crawlSpeed * (a.scuttle > 0 ? 3.2 : 1) * (0.4 + 0.6 * health);
+      // most inverts are night-shift workers: livelier after lights-out
+      const nact = 0.75 + 0.5 * (this.nightFactor || 0);
+      const spd = a.crawlSpeed * (a.scuttle > 0 ? 3.2 : 1) * (0.4 + 0.6 * health) * nact;
       a.pos.addScaledVector(_cp, Math.min(dist, spd * dt));
       a.heading.lerp(_cp, 0.15);
     }
