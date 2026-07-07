@@ -42,8 +42,10 @@ const CSS = `
 .filterbar{display:flex;gap:6px;margin-bottom:8px;overflow-x:auto;padding-bottom:4px}
 .chip{white-space:nowrap;background:rgba(255,255,255,.07);border:1px solid var(--edge);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--txt)}
 .chip.on{background:var(--accent);color:#05201a}
-.fishcard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);width:min(340px,90vw);background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--edge);border-radius:20px;padding:16px;pointer-events:auto;opacity:0;transition:opacity .2s,transform .2s;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.fishcard.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.cardback{position:absolute;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:19}
+.cardback.show{opacity:1;pointer-events:auto}
+.fishcard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);width:min(340px,90vw);background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--edge);border-radius:20px;padding:16px;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:20}
+.fishcard.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
 .fishcard .hero{height:70px;border-radius:14px;margin-bottom:10px;position:relative;overflow:hidden}
 .fishcard .nm{font-size:20px;font-weight:800}
 .fishcard .sci{font-style:italic;opacity:.7;font-size:12px;margin-bottom:8px}
@@ -54,7 +56,8 @@ const CSS = `
 .fishcard .name-in{display:flex;gap:6px;margin-top:10px}
 .fishcard .name-in input{flex:1;background:rgba(255,255,255,.08);border:1px solid var(--edge);border-radius:10px;padding:8px;color:var(--txt);font-size:14px}
 .fishcard .name-in button{background:var(--accent);border:none;color:#05201a;font-weight:800;border-radius:10px;padding:8px 12px}
-.fishcard .x{position:absolute;top:8px;right:12px;background:none;border:none;color:var(--txt);font-size:22px;opacity:.7}
+.fishcard .x{position:absolute;top:6px;right:6px;width:40px;height:40px;background:rgba(0,0,0,.35);border:1px solid var(--edge);border-radius:50%;color:var(--txt);font-size:22px;line-height:1;opacity:.9;display:flex;align-items:center;justify-content:center;z-index:2}
+.fishcard .x:active{transform:scale(.9)}
 .fishcard .stat{display:flex;gap:10px;font-size:11px;margin-top:6px;opacity:.85;flex-wrap:wrap}
 .msgs{margin:4px 0 10px;font-size:12px;line-height:1.4}
 .msgs .blk{color:var(--bad);margin:3px 0}
@@ -156,6 +159,9 @@ export class UI {
   }
 
   _buildFishCard() {
+    this.cardBackdrop = el('div', 'cardback');
+    this.cardBackdrop.onclick = () => this.hideFishCard();
+    this.root.appendChild(this.cardBackdrop);
     this.fishCard = el('div', 'fishcard'); this.root.appendChild(this.fishCard);
   }
 
@@ -230,7 +236,7 @@ export class UI {
       act.append(info, add);
     }
     this.fishCard.appendChild(act);
-    this.fishCard.classList.add('show');
+    this.fishCard.classList.add('show'); this.cardBackdrop.classList.add('show');
   }
 
   // Tap-to-identify an existing fish (record from sim + spec)
@@ -253,11 +259,11 @@ export class UI {
     const save = el('button', null, 'Name');
     save.onclick = () => { const v = inp.value.trim(); if (v) { this.o.onRename(record.id, v); this.fishCard.querySelector('.nm').textContent = v; this.toast(`Named "${v}" 🐠`); } };
     nin.append(inp, save); this.fishCard.appendChild(nin);
-    this.fishCard.classList.add('show');
+    this.fishCard.classList.add('show'); this.cardBackdrop.classList.add('show');
   }
 
   showSpeciesFacts(spec) { this.showFishCard({ name: spec.common, health: 1, hunger: 0, id: null }, spec); }
-  hideFishCard() { this.fishCard.classList.remove('show'); }
+  hideFishCard() { this.fishCard.classList.remove('show'); this.cardBackdrop.classList.remove('show'); }
 
   refreshCare() {
     const s = this.o.sim.summary();
