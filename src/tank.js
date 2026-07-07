@@ -55,29 +55,29 @@ export function buildTank(scene, renderer) {
   group.add(surface);
 
   // ----- Caustics: an animated light-pattern projected onto sand -----
-  const causticMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff, transparent: true, opacity: 0.14,
-    blending: THREE.AdditiveBlending, depthWrite: false,
+  const causticMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { time: { value: 0 } },
+    vertexShader: `
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: `
+      varying vec2 vUv; uniform float time;
+      void main(){
+        vec2 uv = vUv * 8.0;
+        float c = 0.0;
+        for(int i=0;i<3;i++){
+          float fi = float(i);
+          vec2 q = uv + vec2(sin(time*0.7+fi), cos(time*0.6+fi*1.7))*1.5;
+          float d = sin(q.x + time) * sin(q.y + time*0.9);
+          c += smoothstep(0.7, 1.0, d);
+        }
+        gl_FragColor = vec4(vec3(1.0), clamp(c,0.0,1.0) * 0.16);
+      }
+    `,
   });
-  causticMat.userData.uniforms = { time: { value: 0 } };
-  causticMat.onBeforeCompile = (sh) => {
-    sh.uniforms.time = causticMat.userData.uniforms.time;
-    sh.fragmentShader = 'uniform float time;\n' + sh.fragmentShader.replace(
-      '#include <map_fragment>',
-      `#include <map_fragment>
-       vec2 uv = vMapUv * 8.0;
-       float c = 0.0;
-       for(int i=0;i<3;i++){
-         float fi = float(i);
-         vec2 q = uv + vec2(sin(time*0.7+fi), cos(time*0.6+fi*1.7))*1.5;
-         float d = sin(q.x + time) * sin(q.y + time*0.9);
-         c += smoothstep(0.7, 1.0, d);
-       }
-       diffuseColor.rgb *= 1.0; diffuseColor.a *= clamp(c,0.0,1.0);`
-    );
-  };
-  // caustics need a uv-mapped surface; give the plane a map placeholder
-  causticMat.map = whiteTex();
+  causticMat.userData.uniforms = causticMat.uniforms;
   const causticGeo = new THREE.PlaneGeometry(TANK.W, TANK.D);
   causticGeo.rotateX(-Math.PI / 2);
   const caustics = new THREE.Mesh(causticGeo, causticMat);

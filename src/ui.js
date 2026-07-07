@@ -16,10 +16,11 @@ const CSS = `
 .pill .bar>i{display:block;height:100%;border-radius:3px;transition:width .4s,background .4s}
 .tankname{font-weight:800;letter-spacing:.3px}
 .coins{margin-left:auto}
-.toolbar{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0) + 14px);display:flex;justify-content:center;gap:12px;pointer-events:none}
-.tool{pointer-events:auto;width:60px;height:60px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s;color:var(--txt)}
+.toolbar{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0) + 12px);display:flex;justify-content:center;align-items:flex-start;gap:10px;pointer-events:none}
+.toolwrap{pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:5px}
+.tool{pointer-events:auto;width:58px;height:58px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s;color:var(--txt)}
 .tool:active{transform:scale(.9)}
-.tool small{position:absolute;margin-top:52px;font-size:10px;font-weight:700;opacity:.85}
+.tool-cap{font-size:11px;font-weight:700;opacity:.92;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .panel{position:absolute;left:0;right:0;bottom:0;max-height:74%;background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--edge);border-radius:22px 22px 0 0;transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.2,1);pointer-events:auto;padding:14px 14px calc(env(safe-area-inset-bottom,0) + 18px);overflow:hidden;display:flex;flex-direction:column}
 .panel.open{transform:translateY(0)}
 .panel h2{margin:2px 0 10px;font-size:18px;display:flex;align-items:center;gap:8px}
@@ -99,7 +100,11 @@ export class UI {
 
   _buildToolbar() {
     const bar = el('div', 'toolbar');
-    const mk = (emoji, label, fn) => { const b = el('button', 'tool', `${emoji}<small>${label}</small>`); b.onclick = fn; bar.appendChild(b); return b; };
+    const mk = (emoji, label, fn) => {
+      const w = el('div', 'toolwrap');
+      const b = el('button', 'tool', emoji); b.onclick = fn;
+      w.append(b, el('div', 'tool-cap', label)); bar.appendChild(w); return b;
+    };
     mk('🍽️', 'Feed', () => this.toggle('feed'));
     mk('🛒', 'Shop', () => { this.buildCatalog(); this.toggle('shop'); });
     mk('🧽', 'Care', () => { this.refreshCare(); this.toggle('care'); });
@@ -155,6 +160,7 @@ export class UI {
   }
 
   toggle(id) {
+    if (this.hint) this.hint.style.opacity = 0;
     const panels = { feed: this.feedPanel, shop: this.shopPanel, care: this.carePanel };
     const target = panels[id];
     const wasOpen = target.classList.contains('open');
@@ -201,6 +207,7 @@ export class UI {
   }
 
   _tryBuy(spec) {
+    if (this.hint) this.hint.style.opacity = 0;
     const { sim, speciesMap } = this.o;
     const res = evaluateAdd(sim, spec, 1, speciesMap);
     // show a mini review card
@@ -228,6 +235,7 @@ export class UI {
 
   // Tap-to-identify an existing fish (record from sim + spec)
   showFishCard(record, spec) {
+    if (this.hint) this.hint.style.opacity = 0;
     this.fishCard.innerHTML = '';
     const x = el('button', 'x', '✕'); x.onclick = () => this.hideFishCard(); this.fishCard.appendChild(x);
     const hero = el('div', 'hero'); hero.style.background = `linear-gradient(120deg, ${spec.colors.base}, ${spec.colors.patternColor || spec.colors.fin || spec.colors.base})`;

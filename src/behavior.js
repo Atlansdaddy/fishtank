@@ -186,10 +186,11 @@ export class Swarm {
       if (dir.lengthSq() > 1e-5) {
         dir.normalize();
         a.turnRate = 1 - Math.min(1, prevDir.dot(dir));
-        // face travel direction: model nose is +x
-        const yaw = Math.atan2(dir.z, dir.x);
-        const pitch = Math.asin(THREE.MathUtils.clamp(-dir.y, -0.6, 0.6));
-        a.obj.rotation.set(0, -yaw + Math.PI, 0);
+        // face travel direction: model nose is +x. For a Y-rotation of `a`, local
+        // +x points to world (cos a, 0, -sin a), so a = atan2(-dz, dx).
+        const yaw = Math.atan2(-dir.z, dir.x);
+        const pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -0.6, 0.6));
+        a.obj.rotation.set(0, yaw, 0);
         a.obj.rotateZ(pitch);
       }
       a.swimAmt = THREE.MathUtils.clamp(a.vel.length() / a.cruise, 0.35, 2.2);

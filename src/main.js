@@ -32,7 +32,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 1000);
-camera.position.set(0, TANK.H * 0.52, TANK.D * 1.65);
+camera.position.set(0, TANK.H * 0.52, TANK.D * 1.18);
 const camTarget = new THREE.Vector3(0, TANK.H * 0.45, 0);
 
 // ---- lights ----
@@ -290,7 +290,7 @@ function frame() {
 
   // camera: base + gentle auto drift + user orbit
   const az = camAz + Math.sin(t * 0.06) * 0.06;
-  const rad = TANK.D * 1.65;
+  const rad = TANK.D * 1.18;
   camera.position.x = Math.sin(az) * rad;
   camera.position.z = Math.cos(az) * rad;
   camera.position.y = TANK.H * 0.5 + camEl * 40 + Math.sin(t * 0.08) * 1.5;
@@ -312,4 +312,4 @@ function frame() {
 frame();
 
 // expose a little for debugging
-window.__tank = { sim, swarm, food, SPECIES, switchTank };
+window.__tank = { sim, swarm, food, SPECIES, switchTank, ui };

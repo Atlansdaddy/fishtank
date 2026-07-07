@@ -41,16 +41,16 @@ export const SIM = {
 
 export const WATER_THEMES = {
   fresh: {
-    fogColor: 0x0d2b26, fogDensity: 0.0052,
-    deep: 0x0a2622, tint: 0x2a6e5e,
+    fogColor: 0x123f37, fogDensity: 0.0034,
+    deep: 0x0d332c, tint: 0x2a6e5e,
     lightColor: 0xfff2dc, lightIntensity: 1450,
     ambient: 0x3d5a52,
     sand: 0xb99a6b, sandDark: 0x8a6f4a,
     surface: 0x9fd8c8,
   },
   salt: {
-    fogColor: 0x06213a, fogDensity: 0.0046,
-    deep: 0x051d33, tint: 0x1e5f8e,
+    fogColor: 0x0c3050, fogDensity: 0.0030,
+    deep: 0x0a2740, tint: 0x1e5f8e,
     lightColor: 0xdcefff, lightIntensity: 1650,
     ambient: 0x2e4a66,
     sand: 0xe8e0cd, sandDark: 0xbfb49b,

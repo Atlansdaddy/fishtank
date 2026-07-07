@@ -55,7 +55,7 @@ function sample(points, t) {
 function buildBodyGeometry(prof, heightMul, widthMul) {
   const RINGS = 30, SEG = 16;
   const L = prof.L;
-  const pos = [], norm = [], uv = [], aT = [], aSide = [];
+  const pos = [], norm = [], uv = [], aT = [], aSide = [], aV = [];
   const idx = [];
   const ringPts = [];
   for (let i = 0; i <= RINGS; i++) {
@@ -74,6 +74,7 @@ function buildBodyGeometry(prof, heightMul, widthMul) {
       pos.push(x, y, z);
       uv.push(t, j / SEG);
       aT.push(t);
+      aV.push(j / SEG);
       aSide.push(Math.sign(cz) || 0);
       norm.push(0, cy, cz); // refined below
     }
@@ -91,6 +92,7 @@ function buildBodyGeometry(prof, heightMul, widthMul) {
   g.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setAttribute('aT', new THREE.Float32BufferAttribute(aT, 1));
+  g.setAttribute('aV', new THREE.Float32BufferAttribute(aV, 1));
   g.setAttribute('aSide', new THREE.Float32BufferAttribute(aSide, 1));
   g.setIndex(idx);
   g.computeVertexNormals();
@@ -144,12 +146,12 @@ export function makeFishMaterial(spec, palette) {
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = `
-      attribute float aT; attribute float aSide;
+      attribute float aT; attribute float aSide; attribute float aV;
       varying float vT; varying float vSide; varying vec2 vUvF; varying vec3 vViewN;
       uniform float time, swim, waveLen, waveSpeed, tailAmp, bodyLen;
     ` + sh.vertexShader.replace(
       '#include <begin_vertex>',
-      '#include <begin_vertex>\n vT=aT; vSide=aSide; vUvF=uv;\n' + _wave
+      '#include <begin_vertex>\n vT=aT; vSide=aSide; vUvF=vec2(aT, aV);\n' + _wave
     ).replace(
       '#include <defaultnormal_vertex>',
       '#include <defaultnormal_vertex>\n vViewN = normalize(transformedNormal);'

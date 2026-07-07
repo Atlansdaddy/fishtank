@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+import { pathToFileURL } from 'url';
+const browser = await chromium.launch({ args: ['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 412, height: 800 }, deviceScaleFactor: 2 });
+await page.goto(pathToFileURL('index.html').href, { waitUntil: 'load' });
+await page.waitForTimeout(2500);
+await page.screenshot({ path: 'shot_main.png' });
+await page.evaluate(() => { window.__tank.ui.buildCatalog(); window.__tank.ui.toggle('shop'); });
+await page.waitForTimeout(700);
+await page.screenshot({ path: 'shot_shop.png' });
+await page.evaluate(() => { window.__tank.ui.toggle('shop'); window.__tank.ui.toggle('feed'); });
+await page.waitForTimeout(500);
+await page.screenshot({ path: 'shot_feed.png' });
+await page.evaluate(() => { window.__tank.ui.toggle('feed'); const t=window.__tank; const r=t.sim.tank.fish[0]; window.__tank.ui.showFishCard(r, t.SPECIES[r.sp]); });
+await page.waitForTimeout(500);
+await page.screenshot({ path: 'shot_card.png' });
+await browser.close();
+console.log('shots done');
