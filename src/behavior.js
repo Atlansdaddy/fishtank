@@ -8,6 +8,26 @@ import { animateInvertVisual } from './invertbuilder.js';
 
 const V = () => new THREE.Vector3();
 const _a = V(), _b = V(), _c = V(), _sep = V(), _ali = V(), _coh = V(), _steer = V();
+const _cp = V(), _cn = V(), _cf = V(), _cr = V();
+const _cm = new THREE.Matrix4();
+
+// ---- benthic crawler locomotion (snails, shrimp, crabs, stars, urchins) ----
+// Inverts don't swim; they crawl glued to a surface. Each surface pins one axis
+// to a wall/floor plane and lets the critter wander in the other two.
+const FLOOR_Y = TANK.SAND_H;                                  // sit on the substrate
+const CRAWL_SPEED = { snail: 2.2, star: 1.6, urchin: 0.6, shrimp: 4.5, crab: 5.5, crayfish: 4.0 };
+const SURFACES = {
+  floor: { normal: new THREE.Vector3(0, 1, 0),  pin: 'y', val: FLOOR_Y,         a: 'x', b: 'z' },
+  front: { normal: new THREE.Vector3(0, 0, -1), pin: 'z', val: TANK.D / 2 - 2,  a: 'x', b: 'y' },
+  back:  { normal: new THREE.Vector3(0, 0, 1),  pin: 'z', val: -TANK.D / 2 + 2, a: 'x', b: 'y' },
+  left:  { normal: new THREE.Vector3(1, 0, 0),  pin: 'x', val: -TANK.W / 2 + 2, a: 'z', b: 'y' },
+  right: { normal: new THREE.Vector3(-1, 0, 0), pin: 'x', val: TANK.W / 2 - 2,  a: 'z', b: 'y' },
+};
+function clampCrawl(v) {
+  v.x = THREE.MathUtils.clamp(v.x, BOUNDS.minX, BOUNDS.maxX);
+  v.z = THREE.MathUtils.clamp(v.z, BOUNDS.minZ, BOUNDS.maxZ);
+  v.y = THREE.MathUtils.clamp(v.y, TANK.SAND_H, TANK.WATER_LEVEL - 4);
+}
 
 function zoneY(zone) {
   const lo = BOUNDS.minY, hi = BOUNDS.maxY, mid = (lo + hi) / 2;
@@ -41,13 +61,34 @@ export class Agent {
     this.alive = true;
     this.isInvert = this.kind === 'invert';
     this.sessile = spec.zone === 'fixed' || spec.archetype === 'anemone' || spec.archetype === 'featherduster';
+    // Benthic inverts crawl surfaces instead of swimming. Snails & stars also climb glass.
+    this.crawler = this.isInvert && !this.sessile;
+    this.climber = this.crawler && (spec.archetype === 'snail' || spec.archetype === 'star');
+    if (this.crawler) {
+      this.crawlSpeed = CRAWL_SPEED[spec.archetype] ?? 2.5;
+      this.surf = 'floor';
+      this.tgt = new THREE.Vector3();
+      this.heading = new THREE.Vector3(1, 0, 0);
+      this.scuttle = 0;
+      this.scuttleFrom = new THREE.Vector3();
+      this.surfTimer = 6 + Math.random() * 10;
+      this.hasTgt = false;
+    }
     // proxy "physical size" for predator/prey (cm), scaled by visual too
     this.bodyCm = spec.adultSizeCm || 5;
-    obj.position.set(
-      THREE.MathUtils.randFloat(BOUNDS.minX, BOUNDS.maxX),
-      this.zoneYbase + (Math.random() - 0.5) * 6,
-      THREE.MathUtils.randFloat(BOUNDS.minZ, BOUNDS.maxZ)
-    );
+    if (this.crawler) {
+      obj.position.set(
+        THREE.MathUtils.randFloat(BOUNDS.minX + 6, BOUNDS.maxX - 6),
+        FLOOR_Y,
+        THREE.MathUtils.randFloat(BOUNDS.minZ + 6, BOUNDS.maxZ - 6)
+      );
+    } else {
+      obj.position.set(
+        THREE.MathUtils.randFloat(BOUNDS.minX, BOUNDS.maxX),
+        this.zoneYbase + (Math.random() - 0.5) * 6,
+        THREE.MathUtils.randFloat(BOUNDS.minZ, BOUNDS.maxZ)
+      );
+    }
   }
   edibleBy(pred) {
     if (this === pred || !this.alive) return false;
@@ -83,11 +124,12 @@ export class Swarm {
     for (const a of this.agents) {
       if (a.sessile) continue;
       const d = a.pos.distanceTo(point);
-      if (d < radius) {
-        a.startle = Math.max(a.startle, strength * (1 - d / radius));
-        _a.copy(a.pos).sub(point).normalize().multiplyScalar(a.maxSpeed * 2);
-        a.vel.addScaledVector(_a, 1.2);
-      }
+      if (d >= radius) continue;
+      const s = strength * (1 - d / radius);
+      if (a.crawler) { a.scuttle = Math.max(a.scuttle, s); a.scuttleFrom.copy(point); continue; }
+      a.startle = Math.max(a.startle, s);
+      _a.copy(a.pos).sub(point).normalize().multiplyScalar(a.maxSpeed * 2);
+      a.vel.addScaledVector(_a, 1.2);
     }
   }
 
@@ -97,6 +139,7 @@ export class Swarm {
     for (const a of this.agents) {
       if (!a.alive) continue;
       if (a.sessile) { this._animateSessile(a, time); continue; }
+      if (a.crawler) { this._animateCrawler(a, dt, time); continue; }
       a.eatCooldown = Math.max(0, a.eatCooldown - dt);
       a.startle = Math.max(0, a.startle - dt * 1.6);
 
@@ -275,5 +318,103 @@ export class Swarm {
     a.obj.rotation.y = Math.sin(time * 0.4 + a.wander) * 0.05;
     const s = 1 + Math.sin(time * 1.5 + a.wander) * 0.04;
     a.obj.scale.setScalar(a.obj.userData.worldScale * s);
+  }
+
+  // Benthic crawl: creep slowly along the current surface (floor or glass),
+  // scavenge sunk food, and — for snails/stars — climb the walls.
+  _animateCrawler(a, dt, time) {
+    a.eatCooldown = Math.max(0, a.eatCooldown - dt);
+    a.scuttle = Math.max(0, a.scuttle - dt * 1.1);
+    const S = SURFACES[a.surf];
+    const health = this.sim.health(a.instId);
+
+    if (a.scuttle > 0.03) {                         // startled: hurry directly away
+      _cp.copy(a.pos).sub(a.scuttleFrom); _cp[S.pin] = 0;
+      if (_cp.lengthSq() > 1e-4) {
+        _cp.normalize();
+        a.tgt.copy(a.pos).addScaledVector(_cp, 16);
+        a.tgt[S.pin] = S.val; clampCrawl(a.tgt); a.tgt[S.pin] = S.val; a.hasTgt = true;
+      }
+    } else if (this.food.count() > 0 && a.surf === 'floor') {   // graze sunk food
+      if (!a.food || a.food.eaten) a.food = this.food.nearestFor(a.pos, a._dietSet, 100);
+      if (a.food && !a.food.eaten) {
+        a.tgt.copy(a.food.mesh.position); a.tgt.y = S.val; a.hasTgt = true;
+        if (a.pos.distanceTo(a.food.mesh.position) < 3.4) {
+          this.food.eat(a.food); this.sim.feed(a.instId, a._foodValue(a.food.type));
+          a.food = null; a.eatCooldown = 0.6;
+        }
+      }
+    } else { a.food = null; }
+
+    if (a.scuttle <= 0.03 && !a.food) {             // idle wander + glass climbing
+      if (!a.hasTgt || a.pos.distanceTo(a.tgt) < 3) this._pickCrawlTarget(a);
+      if (a.climber) { a.surfTimer -= dt; if (a.surfTimer <= 0) this._switchSurface(a); }
+    }
+
+    // creep toward the target, but only along the surface (never off it)
+    _cp.copy(a.tgt).sub(a.pos); _cp[S.pin] = 0;
+    const dist = _cp.length();
+    if (dist > 1e-3) {
+      _cp.normalize();
+      const spd = a.crawlSpeed * (a.scuttle > 0 ? 3.2 : 1) * (0.4 + 0.6 * health);
+      a.pos.addScaledVector(_cp, Math.min(dist, spd * dt));
+      a.heading.lerp(_cp, 0.15);
+    }
+    a.pos[S.pin] = S.val; clampCrawl(a.pos); a.pos[S.pin] = S.val;   // glue to surface
+
+    // orient flat against the surface: local +Y = surface normal, +X = crawl heading
+    _cn.copy(S.normal);
+    _cf.copy(a.heading).addScaledVector(_cn, -a.heading.dot(_cn));   // tangential component
+    if (_cf.lengthSq() < 1e-5) _cf.set(S.a === 'x' ? 1 : 0, S.a === 'y' ? 1 : 0, S.a === 'z' ? 1 : 0);
+    _cf.normalize();
+    _cr.copy(_cf).cross(_cn).normalize();
+    _cm.makeBasis(_cf, _cn, _cr);
+    a.obj.quaternion.setFromRotationMatrix(_cm);
+    a.obj.scale.setScalar(a.obj.userData.worldScale);
+
+    animateInvertVisual(a.obj, dt, time);
+  }
+
+  _pickCrawlTarget(a) {
+    const S = SURFACES[a.surf];
+    a.tgt.copy(a.pos);
+    a.tgt[S.a] += (Math.random() * 2 - 1) * 18;
+    if (S.b === 'y') {
+      // on glass: aim anywhere up the pane so climbers actually traverse it
+      a.tgt.y = THREE.MathUtils.lerp(TANK.SAND_H + 3, TANK.WATER_LEVEL - 6, Math.random());
+    } else {
+      a.tgt[S.b] += (Math.random() * 2 - 1) * 18;
+    }
+    a.tgt[S.pin] = S.val; clampCrawl(a.tgt); a.tgt[S.pin] = S.val;
+    a.hasTgt = true;
+  }
+
+  // Climbers move between the sand and the glass. From the floor they walk to the
+  // nearest wall, then attach and climb; from a wall they drop back to the sand.
+  _switchSurface(a) {
+    if (a.surf !== 'floor') {
+      a.surf = 'floor'; a.surfTimer = 12 + Math.random() * 16;
+      a.pos.y = FLOOR_Y; this._pickCrawlTarget(a); return;
+    }
+    const near = [
+      ['front', TANK.D / 2 - a.pos.z],
+      ['back',  a.pos.z + TANK.D / 2],
+      ['left',  a.pos.x + TANK.W / 2],
+      ['right', TANK.W / 2 - a.pos.x],
+    ].sort((p, q) => p[1] - q[1])[0];
+    const wall = near[0];
+    if (near[1] < 12) {                             // reached the glass — climb it
+      a.surf = wall; a.surfTimer = 16 + Math.random() * 22;
+      a.pos[SURFACES[wall].pin] = SURFACES[wall].val;
+      this._pickCrawlTarget(a);
+    } else {                                        // walk to the glass base first
+      a.tgt.copy(a.pos);
+      if (wall === 'front') a.tgt.z = BOUNDS.maxZ;
+      else if (wall === 'back') a.tgt.z = BOUNDS.minZ;
+      else if (wall === 'left') a.tgt.x = BOUNDS.minX;
+      else a.tgt.x = BOUNDS.maxX;
+      a.tgt.y = FLOOR_Y; a.hasTgt = true;
+      a.surfTimer = 3 + Math.random() * 3;
+    }
   }
 }
