@@ -211,6 +211,16 @@ export function makeFishMaterial(spec, palette) {
         else if(id==7){ p = smoothstep(0.25,0.0,u); }                               // gradientTail (tail darkening)
         else if(id==8){ p = band(u,0.12,0.05)*band(v,0.5,0.08); }                    // eyespot near tail
         col = mix(col, patCol, clamp(p,0.0,1.0));
+        // dorsal counter-shading: backs are darker than flanks in real fish
+        float topSh = smoothstep(0.35, 0.95, sin(v * 6.2831));
+        col *= 1.0 - topSh * 0.20;
+        // scale shimmer: fine diamond lattice, strongest on the flanks
+        float flank = 1.0 - abs(sin(v * 6.2831));
+        float scl = sin(u * 150.0 + sin(v * 6.2831) * 3.0) * sin(v * 110.0 + u * 12.0);
+        col *= 1.0 + scl * 0.05 * (0.3 + 0.7 * flank) * smoothstep(0.06, 0.3, u);
+        // faint mottle so no two patches of skin read identical
+        float mot = fract(sin(dot(floor(vec2(u * 26.0, v * 14.0)), vec2(127.1, 311.7))) * 43758.5453);
+        col *= 0.965 + 0.07 * mot;
         // iridescent fresnel shimmer
         float fres = pow(1.0 - abs(dot(normalize(vViewN), vec3(0.0,0.0,1.0))), 3.0);
         vec3 shimmer = vec3(0.4,0.7,1.0);
@@ -237,8 +247,21 @@ function makeFinMaterial(spec, uniforms) {
     Object.assign(sh.uniforms, uniforms);      // same objects as the body: one clock
     sh.vertexShader = `
       attribute float aT;
+      varying vec2 vFinP;
       uniform float time, swim, waveLen, waveSpeed, tailAmp, bodyLen;
-    ` + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + _wave);
+    ` + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vFinP = position.xy;\n' + _wave);
+    sh.fragmentShader = `
+      varying vec2 vFinP;
+    ` + sh.fragmentShader.replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+      {
+        // fin rays: fine striations fanning through the membrane
+        float ray = sin(vFinP.y * 26.0 + vFinP.x * 9.0);
+        diffuseColor.rgb *= 0.92 + 0.08 * ray;
+        diffuseColor.a *= 0.94 + 0.06 * ray;   // membrane thinner between rays
+      }`
+    );
   };
   return mat;
 }
