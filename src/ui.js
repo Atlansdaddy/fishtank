@@ -97,7 +97,13 @@ export class UI {
     this.healthPill = el('div', 'pill'); this.healthPill.innerHTML = `❤️<div class="bar"><i></i></div>`;
     this.loadPill = el('div', 'pill'); this.loadPill.innerHTML = `🐠 <span class="lv">0</span>`;
     this.coinPill = el('div', 'pill coins'); this.coinPill.innerHTML = `🪙 <span class="cv">0</span>`;
-    h.append(this.tankPill, this.waterPill, this.algaePill, this.healthPill, this.loadPill, this.coinPill);
+    this.soundPill = el('button', 'pill', this.o.soundOn === false ? '🔇' : '🔊');
+    this.soundPill.style.border = '1px solid var(--edge)';
+    this.soundPill.onclick = () => {
+      const on = this.o.onToggleSound && this.o.onToggleSound();
+      this.soundPill.textContent = on ? '🔊' : '🔇';
+    };
+    h.append(this.tankPill, this.waterPill, this.algaePill, this.healthPill, this.loadPill, this.coinPill, this.soundPill);
     this.root.appendChild(h);
   }
 

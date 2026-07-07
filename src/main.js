@@ -4,6 +4,7 @@ import { buildTank } from './tank.js';
 import { buildFish } from './fishbuilder.js';
 import { buildInvert } from './invertbuilder.js';
 import { CareSim } from './sim.js';
+import { Sound } from './audio.js';
 import { FoodSystem } from './food.js';
 import { Swarm, Agent } from './behavior.js';
 import { UI } from './ui.js';
@@ -82,6 +83,7 @@ function refreshThemeColors() {
 const tankView = buildTank(scene, renderer);
 let fogBase = WATER_THEMES.fresh.fogDensity;
 const sim = new CareSim();
+const snd = new Sound();
 const food = new FoodSystem(scene);
 const swarm = new Swarm(scene, sim, food);
 
@@ -145,6 +147,7 @@ const ui = new UI({
   onDropFood: (type) => {
     food.drop(type, camTarget.x, 0);
     swarm.triggerFeedingRush();
+    snd.drop();
     ui.toast(`${FOODS[type].emoji} ${FOODS[type].name} dropped!`, 1600);
   },
   onBuy: (spec) => {
@@ -152,12 +155,15 @@ const ui = new UI({
     const rec = sim.addFish(spec);
     const a = makeAgent(rec); if (a) swarm.add(a);
     sim.save(); ui.refreshHUD();
-    ui.toast(`Welcome, your new ${spec.common}! 🎉`, 2400);
+    snd.coin();
+    ui.toast(`Welcome, your new baby ${spec.common}! 🎉`, 2400);
   },
   onWaterChange: () => { sim.waterChange(); sim.save(); ui.refreshHUD(); ui.toast('💧 Fresh, clean water!'); },
   onScrub: () => { sim.scrubAlgae(1); sim.save(); ui.refreshHUD(); ui.toast('🧽 Sparkling glass!'); },
   onSwitchTank: () => switchTank(sim.state.current === 'fresh' ? 'salt' : 'fresh'),
   onFitView: () => fitWholeTank(),
+  soundOn: snd.enabled,
+  onToggleSound: () => snd.toggle(),
   onRename: (id, name) => { const f = sim._index.get(id); if (f) { f.name = name; sim.save(); } },
 });
 
@@ -242,6 +248,7 @@ const pointers = new Map();            // pointerId -> {x,y}
 let pinchPrev = 0, gestureMulti = false, gestureMoved = 0, gestureStart = null;
 
 canvas.addEventListener('pointerdown', (e) => {
+  snd.unlock();                          // mobile audio needs a user gesture
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (pointers.size === 1) { gestureMoved = 0; gestureMulti = false; gestureStart = { x: e.clientX, y: e.clientY }; }
   if (pointers.size === 2) { gestureMulti = true; pinchPrev = pinchDistance(); }
@@ -300,7 +307,7 @@ function tapSelect(px, py) {
       const size = a.obj.userData.worldScale * (a.bodyCm || 5);
       cam.targetRadius = THREE.MathUtils.clamp(size * 3.2 + 10, cam.minR, 46);  // zoom in on it
       const rec = sim._index.get(a.instId);
-      if (rec) { ui.showFishCard(rec, SPECIES[rec.sp]); a.startle = 0.4; }
+      if (rec) { ui.showFishCard(rec, SPECIES[rec.sp]); a.startle = 0.4; snd.chime(); }
     }
   } else {
     cam.follow = null;                  // tapped empty water: stop following
@@ -378,8 +385,8 @@ function frame() {
     const dead = sim.reapDead();
     for (const id of dead) { const a = swarm.agents.find(x => x.instId === id); if (a) swarm.remove(a); }
     for (const e of evs) {
-      if (e.type === 'death') ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200);
-      else if (e.type === 'grown') ui.toast(`🎉 ${e.name} is all grown up!`, 3600);
+      if (e.type === 'death') { ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200); snd.sad(); }
+      else if (e.type === 'grown') { ui.toast(`🎉 ${e.name} is all grown up!`, 3600); snd.coin(); }
     }
     ui.refreshHUD();
   }
