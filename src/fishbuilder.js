@@ -109,6 +109,37 @@ function finGeometry(outline, thickness = 0.02) {
   return g;
 }
 
+// Tag fin vertices with the body's head->tail coord so the fin material can run
+// the SAME undulation wave as the body — fins deform with the flank they grow
+// from and can never detach. aT < 0 (behind the tail tip) continues the wave
+// with growing amplitude, which is exactly how a real caudal fin whips.
+function addFinT(geo, L, fixedT = null) {
+  const p = geo.getAttribute('position');
+  const aT = new Float32Array(p.count);
+  for (let i = 0; i < p.count; i++)
+    aT[i] = fixedT ?? THREE.MathUtils.clamp(p.getX(i) / L + 0.5, -0.45, 0.99);
+  geo.setAttribute('aT', new THREE.BufferAttribute(aT, 1));
+  return geo;
+}
+
+// Dorsal/anal fin whose base edge follows the body's curved back/belly profile,
+// rooted 0.08L inside the body so there is never a gap. Front edge tall, soft
+// taper to a short rear edge — the classic ray-fin silhouette.
+function ridgeFinGeometry(prof, L, hMul, { t0, t1, peak, sign }) {
+  const N = 12, outline = [];
+  for (let i = 0; i <= N; i++) {
+    const f = i / N;                                   // 0 front -> 1 back
+    const tt = t1 - (t1 - t0) * f;
+    const x = (tt - 0.5) * L;
+    const yB = sample(prof.hh, tt) * L * hMul;
+    const h = peak * THREE.MathUtils.smoothstep(f, 0, 0.22) * Math.pow(1 - f * 0.92, 0.8);
+    outline.push([x, sign * (yB + h)]);
+  }
+  outline.push([(t0 - 0.5) * L, sign * (sample(prof.hh, t0) * L * hMul - 0.08 * L)]);
+  outline.push([(t1 - 0.5) * L, sign * (sample(prof.hh, t1) * L * hMul - 0.08 * L)]);
+  return finGeometry(outline, 0.02 * L);
+}
+
 const _wave = `
   float phase = aT * waveLen - time * waveSpeed;
   float amp = mix(0.0, tailAmp, pow(1.0 - aT, 1.6)) * swim;
@@ -194,20 +225,40 @@ export function makeFishMaterial(spec, palette) {
   return mat;
 }
 
-const _tmpOutline = {
-  caudalRound: [[0,0],[-0.9,0.7],[-1.2,0.35],[-1.25,0],[-1.2,-0.35],[-0.9,-0.7]],
-  caudalFork:  [[0,0],[-1.3,0.9],[-0.7,0.15],[-0.7,-0.15],[-1.3,-0.9]],
-  caudalFan:   [[0,0],[-1.4,1.2],[-1.5,0],[-1.4,-1.2]],
-  caudalLunate:[[0,0],[-1.6,1.0],[-1.0,0.2],[-1.0,-0.2],[-1.6,-1.0]],
+// Translucent membrane sharing the body material's uniforms, with the same
+// travelling wave injected — so fins move as one piece with the flank.
+function makeFinMaterial(spec, uniforms) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(spec.colors.fin || spec.colors.base),
+    roughness: 0.45, metalness: 0, transparent: true, opacity: 0.78,
+    side: THREE.DoubleSide,
+  });
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);      // same objects as the body: one clock
+    sh.vertexShader = `
+      attribute float aT;
+      uniform float time, swim, waveLen, waveSpeed, tailAmp, bodyLen;
+    ` + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n' + _wave);
+  };
+  return mat;
+}
+
+// Caudal outlines. Each has a vertical root edge at x=0 that gets buried inside
+// the tail peduncle, so the fin grows out of the body instead of floating.
+const CAUDAL = {
+  round: [[0,0.30],[-0.55,0.62],[-1.0,0.55],[-1.22,0.28],[-1.28,0],[-1.22,-0.28],[-1.0,-0.55],[-0.55,-0.62],[0,-0.30]],
+  fork:  [[0,0.26],[-0.55,0.55],[-1.35,0.85],[-0.75,0.16],[-0.75,-0.16],[-1.35,-0.85],[-0.55,-0.55],[0,-0.26]],
+  fan:   [[0,0.30],[-0.7,0.95],[-1.35,1.1],[-1.5,0.45],[-1.55,0],[-1.5,-0.45],[-1.35,-1.1],[-0.7,-0.95],[0,-0.30]],
+  lunate:[[0,0.26],[-0.7,0.75],[-1.55,1.0],[-0.95,0.2],[-0.9,0],[-0.95,-0.2],[-1.55,-1.0],[-0.7,-0.75],[0,-0.26]],
 };
 
 function caudalStyle(spec) {
   const a = spec.archetype;
-  if (a === 'betta' || a === 'goldfish') return { o: 'caudalFan', s: spec.shape?.finFlow ? 1.7 : 1.5 };
-  if (a === 'tang' || a === 'shark') return { o: 'caudalLunate', s: 1.1 };
-  if (a === 'torpedo' || a === 'livebearer' || a === 'cichlid') return { o: 'caudalFork', s: 1.0 };
-  if (a === 'angelfish' || a === 'discus') return { o: 'caudalRound', s: 1.2 };
-  return { o: 'caudalRound', s: 1.0 };
+  if (a === 'betta' || a === 'goldfish') return { o: 'fan', s: spec.shape?.finFlow ? 1.7 : 1.5 };
+  if (a === 'tang' || a === 'shark') return { o: 'lunate', s: 1.1 };
+  if (a === 'torpedo' || a === 'livebearer' || a === 'cichlid') return { o: 'fork', s: 1.0 };
+  if (a === 'angelfish' || a === 'discus') return { o: 'round', s: 1.2 };
+  return { o: 'round', s: 1.0 };
 }
 
 export function buildFish(spec, palette) {
@@ -217,59 +268,67 @@ export function buildFish(spec, palette) {
   const bodyGeo = buildBodyGeometry(prof, heightMul, widthMul);
   const mat = makeFishMaterial(spec, palette);
   const group = new THREE.Group();
+  const inner = new THREE.Group();          // banks into turns as one piece
+  group.add(inner);
 
   const body = new THREE.Mesh(bodyGeo, mat);
   body.castShadow = true;
-  group.add(body);
+  inner.add(body);
 
   const L = prof.L;
-  const finMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(spec.colors.fin || spec.colors.base),
-    roughness: 0.45, metalness: 0, transparent: true, opacity: 0.86,
-    side: THREE.DoubleSide,
-  });
-  // share undulation-free but time-driven sway on CPU
+  const uniforms = mat.userData.uniforms;
+  const finMat = makeFinMaterial(spec, uniforms);
+  const flow = spec.shape?.finFlow ?? 1;
 
-  // caudal (tail) fin
+  // caudal (tail) fin — built in body space, root buried in the peduncle,
+  // deformed by the same wave as the body so it continues the whip seamlessly
   const cs = caudalStyle(spec);
-  const finScale = L * 0.28 * cs.s * (spec.shape?.finFlow ?? 1);
-  const caudal = new THREE.Mesh(finGeometry(_tmpOutline[cs.o]), finMat);
-  caudal.scale.setScalar(finScale);
-  caudal.position.x = -L * 0.5;
+  const finScale = L * 0.28 * cs.s * flow;
+  const pedH = sample(prof.hh, 0.06) * L * heightMul;
+  const rootScale = THREE.MathUtils.clamp(pedH / (0.32 * finScale), 0.35, 1);
+  const caudalGeo = finGeometry(
+    CAUDAL[cs.o].map(([x, y]) => [x * finScale, (x === 0 ? y * rootScale : y) * finScale]),
+    0.02 * L
+  );
+  caudalGeo.translate(-L * 0.42, 0, 0);
+  addFinT(caudalGeo, L);
+  const caudal = new THREE.Mesh(caudalGeo, finMat);
   caudal.castShadow = true;
-  group.add(caudal);
+  inner.add(caudal);
 
-  // dorsal fin (top), height varies by archetype
+  // dorsal fin — upright, base following the curve of the back
   const dorsalTall = ['tang', 'lionfish', 'angelfish', 'gourami', 'betta', 'shark', 'cichlid'].includes(spec.archetype);
   const dorsal = new THREE.Mesh(
-    finGeometry([[ -L*0.28,0],[ -L*0.05,(dorsalTall?0.32:0.14)*L],[ L*0.18,(dorsalTall?0.28:0.12)*L],[ L*0.28,0]]),
+    addFinT(ridgeFinGeometry(prof, L, heightMul, {
+      t0: 0.30, t1: 0.80, peak: (dorsalTall ? 0.30 : 0.14) * L * Math.min(flow, 1.35), sign: 1,
+    }), L),
     finMat
   );
-  dorsal.rotation.x = Math.PI / 2;
-  dorsal.position.y = sample(prof.hh, 0.5) * L * heightMul * 0.95;
-  group.add(dorsal);
+  inner.add(dorsal);
 
-  // anal fin (bottom)
+  // anal fin — upright, base following the belly
   const anal = new THREE.Mesh(
-    finGeometry([[ -L*0.2,0],[ -L*0.02,-(0.14)*L],[ L*0.12,-(0.10)*L],[ L*0.2,0]]),
+    addFinT(ridgeFinGeometry(prof, L, heightMul, {
+      t0: 0.26, t1: 0.52, peak: 0.11 * L * Math.min(flow, 1.35), sign: -1,
+    }), L),
     finMat
   );
-  anal.rotation.x = Math.PI / 2;
-  anal.position.y = -sample(prof.hh, 0.5) * L * heightMul * 0.9;
-  group.add(anal);
+  inner.add(anal);
 
-  // pectoral fins (paddling) — two, near the head
+  // pectoral fins (paddling) — two, near the head; CPU-animated, so pin their
+  // wave coord near the nose where body undulation is ~zero
   const pecOutline = spec.archetype === 'lionfish'
     ? [[0,0],[-0.2,0.9],[-0.5,1.3],[-0.75,0.8],[-0.7,0],[-0.6,-0.7],[-0.3,-0.5]]
     : [[0,0],[-0.15,0.5],[-0.55,0.55],[-0.7,0.1],[-0.5,-0.25]];
   const pecScale = L * 0.16 * (spec.archetype === 'lionfish' ? 2.0 : 1);
-  const pecL = new THREE.Mesh(finGeometry(pecOutline), finMat);
-  const pecR = new THREE.Mesh(finGeometry(pecOutline), finMat);
+  const pecGeo = addFinT(finGeometry(pecOutline), L, 0.98);
+  const pecL = new THREE.Mesh(pecGeo, finMat);
+  const pecR = new THREE.Mesh(pecGeo, finMat);
   for (const [p, s] of [[pecL, 1], [pecR, -1]]) {
     p.scale.set(pecScale, pecScale, pecScale);
     p.position.set(L * 0.22, -L * 0.02, s * sample(prof.hw, 0.35) * L * 0.9);
     p.rotation.y = s * 0.5;
-    group.add(p);
+    inner.add(p);
   }
 
   // eyes
@@ -279,20 +338,17 @@ export function buildFish(spec, palette) {
   for (const s of [1, -1]) {
     const eye = new THREE.Mesh(eyeGeo, eyeWhite);
     eye.position.set(L * 0.42, L * 0.05, s * sample(prof.hw, 0.85) * L * 0.85);
-    group.add(eye);
+    inner.add(eye);
     const gl = new THREE.Mesh(new THREE.SphereGeometry(L * 0.012, 6, 6), glint);
     gl.position.set(L * 0.44, L * 0.07, s * sample(prof.hw, 0.85) * L * 0.85);
-    group.add(gl);
+    inner.add(gl);
   }
 
   // set body length uniform for shader amplitude scaling
-  mat.userData.uniforms.bodyLen.value = L;
-  mat.userData.uniforms.waveSpeed.value = 6.0 + (spec.speed || 1) * 3.0;
+  uniforms.bodyLen.value = L;
+  uniforms.waveSpeed.value = 6.0 + (spec.speed || 1) * 3.0;
 
-  group.userData = {
-    mat, caudal, pecL, pecR, dorsal, anal, L,
-    caudalRest: caudal.rotation.z,
-  };
+  group.userData = { mat, inner, caudal, pecL, pecR, dorsal, anal, L };
   // overall scale from spec size + a real-ish size cue from adult length
   const worldScale = (spec.size || 1) * (0.75 + Math.min(1.6, (spec.adultSizeCm || 5) / 12));
   group.scale.setScalar(worldScale);
@@ -301,19 +357,16 @@ export function buildFish(spec, palette) {
 }
 
 // Per-frame visual update for a fish group (called by behavior).
+// Median fins (caudal/dorsal/anal) ride the shader wave — nothing to do here.
 export function animateFishVisual(group, dt, t, swim, turnRate) {
   const u = group.userData;
   u.mat.userData.uniforms.time.value = t;
   u.mat.userData.uniforms.swim.value = swim;
-  // tail fin sways opposite/behind body wave
-  const beat = 6.0 + swim * 6.0;
-  u.caudal.rotation.y = Math.sin(t * beat) * 0.5 * (0.3 + swim);
   // pectorals paddle; faster when hovering (low swim) to hold station
   const paddle = Math.sin(t * (5.0 + (1 - swim) * 4.0));
   u.pecL.rotation.z = 0.3 + paddle * 0.45;
   u.pecR.rotation.z = -0.3 - paddle * 0.45;
-  // bank into turns
+  // bank the whole fish (body + fins + eyes) into turns, smoothly
   const bank = THREE.MathUtils.clamp(-turnRate * 6.0, -0.6, 0.6);
-  group.children[0].rotation.x = bank;
-  u.dorsal.rotation.z = Math.sin(t * beat * 0.5) * 0.06;
+  u.inner.rotation.x += (bank - u.inner.rotation.x) * Math.min(1, dt * 6);
 }
