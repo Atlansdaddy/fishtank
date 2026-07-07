@@ -138,8 +138,14 @@ export class Swarm {
 
     for (const a of this.agents) {
       if (!a.alive) continue;
+      // growth: juveniles render smaller and are easier prey; adults full size
+      const rec = this.sim._index.get(a.instId);
+      const growth = rec?.growth ?? 1;
+      a.growFactor = (rec?.var ?? 1) * (0.45 + 0.55 * growth);
+      a.bodyCm = (a.spec.adultSizeCm || 5) * (0.4 + 0.6 * growth);
       if (a.sessile) { this._animateSessile(a, time); continue; }
       if (a.crawler) { this._animateCrawler(a, dt, time); continue; }
+      a.obj.scale.setScalar(a.obj.userData.worldScale * a.growFactor);
       a.eatCooldown = Math.max(0, a.eatCooldown - dt);
       a.startle = Math.max(0, a.startle - dt * 1.6);
 
@@ -317,7 +323,7 @@ export class Swarm {
     // anemones & feather dusters sway tentacles; handled by a small vertex wobble
     a.obj.rotation.y = Math.sin(time * 0.4 + a.wander) * 0.05;
     const s = 1 + Math.sin(time * 1.5 + a.wander) * 0.04;
-    a.obj.scale.setScalar(a.obj.userData.worldScale * s);
+    a.obj.scale.setScalar(a.obj.userData.worldScale * (a.growFactor ?? 1) * s);
   }
 
   // Benthic crawl: creep slowly along the current surface (floor or glass),
@@ -361,6 +367,7 @@ export class Swarm {
       a.heading.lerp(_cp, 0.15);
     }
     a.pos[S.pin] = S.val; clampCrawl(a.pos); a.pos[S.pin] = S.val;   // glue to surface
+    a.obj.scale.setScalar(a.obj.userData.worldScale * (a.growFactor ?? 1));
 
     // orient flat against the surface: local +Y = surface normal, +X = crawl heading
     _cn.copy(S.normal);
@@ -370,7 +377,6 @@ export class Swarm {
     _cr.copy(_cf).cross(_cn).normalize();
     _cm.makeBasis(_cf, _cn, _cr);
     a.obj.quaternion.setFromRotationMatrix(_cm);
-    a.obj.scale.setScalar(a.obj.userData.worldScale);
 
     animateInvertVisual(a.obj, dt, time);
   }

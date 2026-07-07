@@ -252,8 +252,10 @@ export class UI {
     this.fishCard.appendChild(el('div', 'hab', '🌍 ' + spec.habitat));
     const ul = el('ul', 'facts'); for (const fct of spec.facts) ul.appendChild(el('li', null, fct));
     this.fishCard.appendChild(ul);
+    const g = record.growth ?? 1;
+    const stage = g >= 1 ? '🐟 Adult' : g > 0.65 ? `🐠 Growing ${Math.round(g*100)}%` : `🌱 Baby ${Math.round(g*100)}%`;
     const stat = el('div', 'stat',
-      `<span>❤️ ${Math.round(record.health*100)}%</span><span>🍽️ ${record.hunger>0.6?'Hungry':record.hunger>0.3?'Peckish':'Full'}</span><span>📏 grows to ${spec.adultSizeCm}cm</span><span>💛 ${spec.care} care</span>`);
+      `<span>❤️ ${Math.round(record.health*100)}%</span><span>🍽️ ${record.hunger>0.6?'Hungry':record.hunger>0.3?'Peckish':'Full'}</span><span>${stage}</span><span>📏 grows to ${spec.adultSizeCm}cm</span><span>💛 ${spec.care} care</span>`);
     this.fishCard.appendChild(stat);
     const nin = el('div', 'name-in');
     const inp = el('input'); inp.placeholder = 'Name your fish…'; inp.value = record.name || '';

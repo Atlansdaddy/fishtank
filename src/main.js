@@ -187,9 +187,12 @@ if (offlineHours > 0.2) {
   const evs = sim.drainEvents();
   reapAllTanks(true);
   setTimeout(() => {
+    const grown = evs.filter(e => e.type === 'grown');
     if (evs.some(e => e.type === 'death')) {
       const names = evs.filter(e => e.type === 'death').map(e => e.name);
       ui.toast(`😢 While you were gone, ${names.slice(0,2).join(' & ')}${names.length>2?' and others':''} didn't make it. Keep your tank healthy!`, 5200);
+    } else if (grown.length) {
+      ui.toast(`🎉 ${grown.slice(0,2).map(e => e.name).join(' & ')}${grown.length>2?' and others':''} grew up while you were away!`, 4600);
     } else if (earned > 0) {
       ui.toast(`👋 Welcome back! Your fish were happy and earned you ${earned}🪙`, 4200);
     }
@@ -338,7 +341,10 @@ function frame() {
   if (evs.length) {
     const dead = sim.reapDead();
     for (const id of dead) { const a = swarm.agents.find(x => x.instId === id); if (a) swarm.remove(a); }
-    for (const e of evs) if (e.type === 'death') ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200);
+    for (const e of evs) {
+      if (e.type === 'death') ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200);
+      else if (e.type === 'grown') ui.toast(`🎉 ${e.name} is all grown up!`, 3600);
+    }
     ui.refreshHUD();
   }
 

@@ -35,6 +35,7 @@ export const SIM = {
   UNEATEN_POLLUTION: 0.006,  // water quality hit per rotted food item
   OFFLINE_CAP_HOURS: 96,     // max elapsed decay applied on return
   HEAL_HOURS: 30,            // full recovery time when fed + clean water
+  GROW_DAYS: 5,              // juvenile -> adult, given food + decent health
   COINS_PER_GOOD_DAY: 12,
   STARTING_COINS: 100,
 };

@@ -61,6 +61,8 @@ export class CareSim {
       id: newInstId(), sp: spec.id, name: name || spec.common,
       hunger: 0.2, health: 1.0, bioload: spec.bioload || 1,
       kind: spec.kind || 'fish', dead: false, everFed: false, age: 0,
+      growth: 0.35,                          // juvenile; grows to 1 with good care
+      var: 0.85 + Math.random() * 0.3,       // individual size variation (±15%)
     };
     this.tank.fish.push(f);
     this._index.set(f.id, f);
@@ -132,6 +134,11 @@ export class CareSim {
       if (t.water < SIM.SICK_THRESHOLD) dh -= (SIM.SICK_THRESHOLD - t.water) * hours / 24;
       if (f.hunger < 0.6 && t.water > 0.6) dh += hours / SIM.HEAL_HOURS;
       f.health = Math.max(0, Math.min(1, f.health + dh));
+      // growth: juveniles grow into adults while fed and reasonably healthy
+      if ((f.growth ?? 1) < 1 && f.hunger < 0.7 && f.health > 0.5) {
+        f.growth = Math.min(1, f.growth + hours / (SIM.GROW_DAYS * 24));
+        if (f.growth >= 1) this.events.push({ type: 'grown', id: f.id, name: f.name });
+      }
       if (f.health <= 0 && !f.dead) {
         f.dead = true;
         this.events.push({ type: 'death', id: f.id, name: f.name, sp: f.sp });
@@ -159,7 +166,13 @@ export class CareSim {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       const s = JSON.parse(raw);
-      if (s && s.tanks) { this.state = s; this._reindex(); return true; }
+      if (s && s.tanks) {
+        // migrate pre-growth saves: existing fish are adults with slight variation
+        for (const which of ['fresh', 'salt']) for (const f of s.tanks[which].fish) {
+          f.growth ??= 1; f.var ??= 0.85 + Math.random() * 0.3;
+        }
+        this.state = s; this._reindex(); return true;
+      }
     } catch (e) {}
     return false;
   }
