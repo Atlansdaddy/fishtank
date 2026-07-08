@@ -12,6 +12,34 @@ const GAME_HOURS_PER_REAL_MIN = 1.0;
 let _uid = 1;
 export function newInstId() { return 'f' + (_uid++) + '_' + Math.floor(performance.now() % 100000); }
 
+// ---- IndexedDB mirror: a second on-device copy of the save, so a cleared
+// localStorage (or a partial eviction) doesn't cost the kid his tank. ----
+function idbPut(key, val) {
+  try {
+    const r = indexedDB.open('habitat', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => {
+      try { r.result.transaction('kv', 'readwrite').objectStore('kv').put(val, key); } catch (e) {}
+    };
+  } catch (e) {}
+}
+function idbGet(key) {
+  return new Promise((res) => {
+    try {
+      const r = indexedDB.open('habitat', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => {
+        try {
+          const q = r.result.transaction('kv').objectStore('kv').get(key);
+          q.onsuccess = () => res(q.result || null);
+          q.onerror = () => res(null);
+        } catch (e) { res(null); }
+      };
+      r.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+}
+
 function blankTank() {
   return { fish: [], water: 1.0, algae: 0.0 };  // water 1=pristine, algae 0=clean
 }
@@ -187,25 +215,51 @@ export class CareSim {
 
   drainEvents() { const e = this.events; this.events = []; return e; }
 
-  // ---------- persistence ----------
+  // ---------- persistence: localStorage + IndexedDB mirror ----------
   save() {
     this.state.lastSeen = Date.now();
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.state)); } catch (e) {}
+    const json = JSON.stringify(this.state);
+    try { localStorage.setItem(SAVE_KEY, json); } catch (e) {}
+    idbPut(SAVE_KEY, json);                  // second copy, fire-and-forget
+  }
+  _migrate(s) {
+    // pre-growth saves: existing fish are adults with slight variation
+    for (const which of ['fresh', 'salt']) for (const f of s.tanks[which].fish) {
+      f.growth ??= 1; f.var ??= 0.85 + Math.random() * 0.3;
+    }
+    s.discovered ??= [];
+  }
+  _apply(s) {
+    if (!s || !s.tanks || !s.tanks.fresh || !s.tanks.salt) return false;
+    this._migrate(s);
+    this.state = s; this._reindex();
+    return true;
   }
   load() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return false;
-      const s = JSON.parse(raw);
-      if (s && s.tanks) {
-        // migrate pre-growth saves: existing fish are adults with slight variation
-        for (const which of ['fresh', 'salt']) for (const f of s.tanks[which].fish) {
-          f.growth ??= 1; f.var ??= 0.85 + Math.random() * 0.3;
-        }
-        this.state = s; this._reindex(); return true;
-      }
+      if (raw) return this._apply(JSON.parse(raw));
     } catch (e) {}
     return false;
+  }
+  // Boot fallback: localStorage was empty/cleared — try the IndexedDB mirror.
+  async restoreFromMirror() {
+    try {
+      const raw = await idbGet(SAVE_KEY);
+      if (raw && this._apply(JSON.parse(raw))) { this.save(); return true; }
+    } catch (e) {}
+    return false;
+  }
+  // Manual backups: the whole state as a JSON string the family can keep anywhere.
+  exportSave() { this.state.lastBackup = Date.now(); this.save(); return JSON.stringify(this.state); }
+  importSave(str) {
+    try {
+      const s = JSON.parse(str);
+      if (!this._apply(s)) return false;
+      this.state.lastSeen = Date.now();      // no offline-decay bomb from old backups
+      this.save();
+      return true;
+    } catch (e) { return false; }
   }
 
   // Health summary for HUD

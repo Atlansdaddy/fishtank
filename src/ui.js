@@ -180,6 +180,11 @@ export class UI {
     actions.append(wc, sc);
     this.carePanel.appendChild(actions);
     this.careMeters = el('div'); this.carePanel.appendChild(this.careMeters);
+    const bk = el('div', 'care-actions'); bk.style.marginTop = '12px';
+    const ex = el('button', null, `<span class="e">💾</span>Backup Tank`); ex.onclick = () => this.o.onBackup && this.o.onBackup();
+    const im = el('button', null, `<span class="e">📂</span>Restore`); im.onclick = () => this.o.onRestore && this.o.onRestore();
+    bk.append(ex, im);
+    this.carePanel.appendChild(bk);
     this.carePanel.appendChild(el('div', 'hint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
   }
 

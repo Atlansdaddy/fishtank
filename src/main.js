@@ -168,6 +168,37 @@ const ui = new UI({
   onFitView: () => fitWholeTank(),
   soundOn: snd.enabled,
   onToggleSound: () => snd.toggle(),
+  onBackup: async () => {
+    const data = sim.exportSave();
+    const name = `habitat-save-${new Date().toISOString().slice(0, 10)}.json`;
+    try {
+      const file = new File([data], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Habitat tank backup' });
+        ui.toast('💾 Backup shared — keep it somewhere safe!', 3200);
+        return;
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    ui.toast('💾 Backup downloaded!', 3200);
+  },
+  onRestore: () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      try {
+        if (sim.importSave(await f.text())) {
+          switchTank(sim.state.current);
+          ui.toast('📂 Tank restored! Welcome back, fish! 🐠', 3800);
+        } else ui.toast("⚠️ That file isn't a Habitat backup.", 3200);
+      } catch (e) { ui.toast('⚠️ Could not read that file.', 3200); }
+    };
+    inp.click();
+  },
   onRename: (id, name) => { const f = sim._index.get(id); if (f) { f.name = name; sim.save(); } },
 });
 
@@ -190,11 +221,14 @@ function seedTank(which) {
   for (const [id, n] of STARTERS[which]) { const sp = SPECIES[id]; if (sp) for (let i = 0; i < n; i++) sim.addFish(sp); }
   sim.switchTank(prev);
 }
-if (!sim.load()) {
+const hadSave = sim.load();
+if (!hadSave) {
   seedTank('fresh'); seedTank('salt');
   sim.state.current = 'fresh'; sim._reindex();
   sim.save();
 }
+// ask the browser to treat our storage as precious (Chrome honors, iOS ignores)
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 // Fish Book backfill: everything currently owned counts as discovered
 sim.state.discovered ??= [];
@@ -246,6 +280,20 @@ if (offlineHours > 0.2) {
   swarm.triggerFeedingRush();
 }
 ui.refreshHUD();
+
+// localStorage came up empty: quietly check the IndexedDB mirror before the
+// kid sees a fresh tank he didn't ask for
+if (!hadSave) {
+  sim.restoreFromMirror().then((ok) => {
+    if (ok) { switchTank(sim.state.current); ui.refreshHUD(); ui.toast('💾 Your tank was restored from a device backup!', 4200); }
+  });
+}
+// gentle nudge if there's no recent manual backup
+setTimeout(() => {
+  const lb = sim.state.lastBackup || 0;
+  if (Date.now() - lb > 14 * 864e5 && sim.tank.fish.length > 0)
+    ui.toast('💾 Tip: tap Care → Backup Tank now and then, so your fish are never lost!', 5200);
+}, 12000);
 
 // ---- camera controller: pinch zoom, drag orbit, tap-to-follow ----
 const raycaster = new THREE.Raycaster();
