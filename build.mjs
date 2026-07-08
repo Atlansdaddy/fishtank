@@ -29,6 +29,37 @@ const html = `<!doctype html>
 <style>html,body{margin:0;height:100%;background:#02110f;overscroll-behavior:none;touch-action:none}</style>
 </head>
 <body>
+<script>
+// Crash reporter: a black screen must explain itself. Catches errors from the
+// game script below (including parse errors) and missing WebGL2 (old iOS,
+// Lockdown Mode), and prints them on screen so they can be reported.
+(function () {
+  function show(msg) {
+    var d = document.getElementById('errbox');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = 'errbox';
+      d.style.cssText = 'position:fixed;left:10px;right:10px;top:10px;z-index:99999;background:#2b1d1d;color:#ffd9d2;border:1px solid #a55;border-radius:12px;padding:12px;font:13px/1.45 -apple-system,system-ui,sans-serif;white-space:pre-wrap;word-break:break-word';
+      d.onclick = function () { d.remove(); };
+      (document.body || document.documentElement).appendChild(d);
+    }
+    d.textContent = msg + '\\n\\n(' + navigator.userAgent + ')\\nTap this box to close';
+  }
+  addEventListener('error', function (e) {
+    show('⚠️ Habitat hit an error:\\n' + (e.message || String(e.error)) + (e.lineno ? '\\nline ' + e.lineno + ':' + e.colno : ''));
+  });
+  addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    show('⚠️ Habitat hit an error:\\n' + ((r && (r.stack || r.message)) || String(r)));
+  });
+  addEventListener('DOMContentLoaded', function () {
+    try {
+      var gl = document.createElement('canvas').getContext('webgl2');
+      if (!gl) show('🐟 This browser cannot show the 3D tank: WebGL2 is unavailable.\\nOn iPhone this needs iOS 15 or newer, in Safari — and Lockdown Mode must be OFF for this site (aA menu > Website Settings).');
+    } catch (err) { show('🐟 3D graphics unavailable: ' + err.message); }
+  });
+})();
+</script>
 <script>${js}</script>
 <script>
 if ('serviceWorker' in navigator) {
