@@ -15,9 +15,20 @@ import { UI } from './ui.js';
 import { FRESHWATER_SPECIES } from './species/freshwater.js';
 import { SALTWATER_SPECIES } from './species/saltwater.js';
 import { INVERT_SPECIES } from './species/inverts.js';
+import { INVERT_SPECIES_2 } from './species/inverts2.js';
+import { Keeper } from './progress.js';
 
-const ALL = [...FRESHWATER_SPECIES, ...SALTWATER_SPECIES, ...INVERT_SPECIES];
+const ALL = [...FRESHWATER_SPECIES, ...SALTWATER_SPECIES, ...INVERT_SPECIES, ...INVERT_SPECIES_2];
 const SPECIES = {}; for (const s of ALL) SPECIES[s.id] = s;
+
+// weekly special drops: themed batches of the expansion inverts, one per real week
+const _wk = (name, f) => ({ name, ids: INVERT_SPECIES_2.filter(f).map(s => s.id) });
+const WEEKLY = [
+  _wk('🐌 Snail Squad', s => s.archetype === 'snail'),
+  _wk('🦐 Shrimp Party', s => s.archetype === 'shrimp'),
+  _wk('🦀 Crab Crew', s => s.archetype === 'crab' || s.archetype === 'crayfish'),
+  _wk('⭐ Weird & Wonderful', s => ['star', 'urchin', 'anemone', 'featherduster'].includes(s.archetype)),
+].filter(b => b.ids.length);
 
 const STARTERS = {
   fresh: [['neon_tetra',7],['guppy',3],['bronze_corydoras',3],['bristlenose_pleco',1],['dwarf_gourami',1],['cherry_shrimp',3]],
@@ -148,14 +159,29 @@ swarm.onEaten = (pred, prey) => {
   ui.toast(`🦈 The ${SPECIES[pred.spec.id].common} ate a ${SPECIES[prey.spec.id].common}!`, 3200);
 };
 
+// ---- Fish Keeper progression: XP -> level-up deliveries, secrets, weekly drops ----
+const keeper = new Keeper(sim, ALL, WEEKLY);
+function celebrate(levelUps) {
+  if (levelUps) {
+    ui.toast(`🎖️ Fish Keeper Level ${keeper.k.level}! 🚚 A delivery of new fish arrived at the shop!`, 4600);
+    snd.coin();
+  }
+  for (const { spec, def } of keeper.checkSecrets()) {
+    setTimeout(() => { ui.toast(`${def.emoji}✨ SECRET FISH UNLOCKED: ${spec.common}! Check the shop!`, 5200); snd.coin(); }, levelUps ? 3000 : 400);
+  }
+  if (ui.shopPanel.classList.contains('open')) ui.buildCatalog();
+}
+function awardXP(kind, mult = 1) { celebrate(keeper.award(kind, mult)); }
+
 // ---- UI wiring ----
 const ui = new UI({
-  sim, food, swarm, speciesMap: SPECIES, allSpecies: ALL,
+  sim, food, swarm, speciesMap: SPECIES, allSpecies: ALL, keeper,
   onDropFood: (type) => {
     food.drop(type, camTarget.x, 0);
     swarm.triggerFeedingRush();
     snd.drop();
     ui.toast(`${FOODS[type].emoji} ${FOODS[type].name} dropped!`, 1600);
+    awardXP('feed');
   },
   onBuy: (spec) => {
     if (!sim.spendCoins(spec.price)) { ui.toast('Not enough coins!'); return; }
@@ -167,10 +193,11 @@ const ui = new UI({
     if (rec.newSpecies) {
       sim.addCoins(5);
       setTimeout(() => { ui.toast('📖 New species discovered! +5🪙 — check your Fish Book!', 3400); snd.chime(); ui.refreshHUD(); }, 2600);
+      awardXP('discover');
     }
   },
-  onWaterChange: () => { sim.waterChange(); sim.save(); ui.refreshHUD(); ui.toast('💧 Fresh, clean water!'); },
-  onScrub: () => { sim.scrubAlgae(1); sim.save(); ui.refreshHUD(); ui.toast('🧽 Sparkling glass!'); },
+  onWaterChange: () => { sim.waterChange(); sim.save(); ui.refreshHUD(); ui.toast('💧 Fresh, clean water!'); awardXP('water'); },
+  onScrub: () => { sim.scrubAlgae(1); sim.save(); ui.refreshHUD(); ui.toast('🧽 Sparkling glass!'); awardXP('scrub'); },
   onSwitchTank: () => switchTank(sim.state.current === 'fresh' ? 'salt' : 'fresh'),
   onFitView: () => fitWholeTank(),
   soundOn: snd.enabled,
@@ -338,6 +365,15 @@ if (cloud.enabled) {
     }
   });
 }
+// keeper progression boot checks: night-owl secret, weekly drop announcements
+setTimeout(() => {
+  keeper.nightCheck();
+  const wk = keeper.weeklyNews();
+  if (wk) { ui.toast(`🚚 Weekly special drop: ${wk.name} just arrived at the shop!`, 5200); snd.coin(); }
+  celebrate(0);
+  sim.save();
+}, 5000);
+
 // gentle nudge if there's no recent manual backup
 setTimeout(() => {
   if (!store.ok) {
@@ -520,19 +556,47 @@ function spawnVisitor() {
   addSurprise('visitor', null, { ttl: 55 + Math.random() * 35, agent: a, name: spec.common });
   ui.toast(`👀 A wild ${spec.common} is visiting your tank!`, 3400);
 }
+function crateMesh() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.85 });
+  const rope = new THREE.MeshStandardMaterial({ color: 0xd9c48a, roughness: 0.9 });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), wood); box.position.y = 2; g.add(box);
+  for (const r of [-1, 1]) {
+    const band = new THREE.Mesh(new THREE.BoxGeometry(4.15, 0.5, 4.15), rope);
+    band.position.y = 2 + r * 1.1; g.add(band);
+  }
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshBasicMaterial({ color: 0x9be2ff }));
+  glow.position.y = 4.6; g.add(glow); g.userData.glow = glow;
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+function spawnCrate() {
+  const c = crateMesh();
+  c.position.set(THREE.MathUtils.randFloat(BOUNDS.minX + 8, BOUNDS.maxX - 8), TANK.SAND_H, THREE.MathUtils.randFloat(BOUNDS.minZ + 6, BOUNDS.maxZ - 6));
+  c.rotation.y = Math.random() * 6;
+  addSurprise('crate', c, { ttl: 170 });
+}
 function rollSurprise() {
-  const opts = [['treasure', 0.34], ['visitor', 0.28]];
+  const opts = [['treasure', 0.34], ['visitor', 0.28], ['crate', 0.12]];
   if (swarm.agents.some(a => a.spec.archetype === 'shrimp')) opts.push(['molt', 0.22]);
   if (swarm.agents.some(a => a.spec.archetype === 'snail')) opts.push(['eggs', 0.16]);
   let r = Math.random() * opts.reduce((s, o) => s + o[1], 0);
-  for (const [k, w] of opts) { r -= w; if (r <= 0) return ({ treasure: spawnTreasure, molt: spawnMolt, eggs: spawnSnailEggs, visitor: spawnVisitor })[k](); }
+  for (const [k, w] of opts) { r -= w; if (r <= 0) return ({ treasure: spawnTreasure, molt: spawnMolt, eggs: spawnSnailEggs, visitor: spawnVisitor, crate: spawnCrate })[k](); }
 }
 function openSurprise(s, px, py) {
   if (s.kind === 'treasure') {
     sim.addCoins(s.coins); sim.save();
+    keeper.k.n.treasure++; celebrate(0);
     ui.toast(`💰 Treasure! +${s.coins}🪙`, 3200); snd.coin();
     for (let i = 0; i < 6; i++) setTimeout(() => spawnSparkle(px + (Math.random() - 0.5) * 60, py + (Math.random() - 0.5) * 60), i * 70);
     removeSurprise(s); ui.refreshHUD();
+  } else if (s.kind === 'crate') {
+    const spec = keeper.surpriseUnlock();
+    if (spec) { ui.toast(`📦 A supply crate! ${spec.common} is now in the shop — a whole delivery early!`, 4800); snd.coin(); celebrate(0); }
+    else { sim.addCoins(15); ui.toast('📦 A supply crate with 15🪙 inside!', 3200); snd.coin(); ui.refreshHUD(); }
+    sim.save();
+    for (let i = 0; i < 6; i++) setTimeout(() => spawnSparkle(px + (Math.random() - 0.5) * 60, py + (Math.random() - 0.5) * 60), i * 70);
+    removeSurprise(s);
   } else if (s.kind === 'molt') {
     sim.addCoins(s.coins); sim.save();
     ui.toast(`🦐 An empty shell! Shrimp shed their shells to grow. +${s.coins}🪙`, 4200); snd.chime();
@@ -653,12 +717,13 @@ function frame() {
     for (const id of dead) { const a = swarm.agents.find(x => x.instId === id); if (a) swarm.remove(a); }
     for (const e of evs) {
       if (e.type === 'death') { ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200); snd.sad(); notify.event('😢 Sad news in your tank', `${e.name} has died. Check the water!`); }
-      else if (e.type === 'grown') { ui.toast(`🎉 ${e.name} is all grown up!`, 3600); snd.coin(); }
+      else if (e.type === 'grown') { ui.toast(`🎉 ${e.name} is all grown up!`, 3600); snd.coin(); awardXP('grown'); }
       else if (e.type === 'birth') {
         for (const id of e.ids) { const rec = sim._index.get(id); if (rec) { const a = makeAgent(rec); if (a) swarm.add(a); } }
         ui.toast(`🍼 Your ${e.name}s had ${e.ids.length === 1 ? 'a baby' : e.ids.length + ' babies'}!!`, 4600);
         snd.coin(); sim.save(); ui.refreshHUD();
         notify.event('🍼 Babies!!', `Your ${e.name}s just had ${e.ids.length === 1 ? 'a baby' : e.ids.length + ' babies'}!`);
+        awardXP('birth', e.ids.length);
       }
     }
     ui.refreshHUD();
@@ -687,6 +752,7 @@ function frame() {
     dayTimer = 0;
     const s = sim.summary();
     if (s.avgHealth > 0.6 && s.count > 0) { sim.addCoins(Math.round(SIM.COINS_PER_GOOD_DAY * s.avgHealth)); ui.refreshHUD(); }
+    celebrate(keeper.dailyCheck(s));      // once per real day of good care
     sim.save();
     cloud.push(); cloud.tick();
   }
@@ -697,6 +763,6 @@ function frame() {
 frame();
 
 // expose a little for debugging
-window.__tank = { sim, swarm, food, SPECIES, switchTank, ui, cam, camera, fitWholeTank,
+window.__tank = { sim, swarm, food, SPECIES, switchTank, ui, cam, camera, fitWholeTank, keeper,
   setHour: (h) => { hourOverride = h; }, dayFactor: () => df,
-  surprises, spawn: { treasure: spawnTreasure, molt: spawnMolt, eggs: spawnSnailEggs, visitor: spawnVisitor } };
+  surprises, spawn: { treasure: spawnTreasure, molt: spawnMolt, eggs: spawnSnailEggs, visitor: spawnVisitor, crate: spawnCrate } };

@@ -1,6 +1,7 @@
 import { FOODS } from './constants.js';
 import { evaluateAdd } from './rules.js';
 import { portrait } from './portraits.js';
+import { SECRETS } from './progress.js';
 
 // What each diet key looks like to a kid: same emoji as the Feed buttons so
 // the card tells them exactly which button to press. 'detritus' isn't a food
@@ -44,7 +45,16 @@ const CSS = `
 .foodbtn{pointer-events:auto;flex:1;min-width:70px;max-width:110px;background:rgba(255,255,255,.06);border:1px solid var(--edge);border-radius:16px;padding:12px 8px;text-align:center;color:var(--txt)}
 .foodbtn .e{font-size:30px}.foodbtn .n{font-size:12px;font-weight:700;margin-top:4px}.foodbtn .b{font-size:10px;opacity:.7;margin-top:3px;line-height:1.2}
 .foodbtn:active{transform:scale(.94)}
-.catalog{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:2px}
+.cscroll{overflow-y:auto;min-height:0}
+.catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:2px}
+.keeperbar{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;margin:2px 2px 8px;flex-shrink:0}
+.keeperbar .lvl{background:linear-gradient(120deg,#ffd76a,#ff9d3c);color:#3a2404;border-radius:999px;padding:3px 10px;font-weight:800;white-space:nowrap}
+.keeperbar .track{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+.keeperbar .track>i{display:block;height:100%;background:linear-gradient(90deg,#ffd76a,#ff9d3c);border-radius:4px;transition:width .4s}
+.keeperbar .xp{opacity:.75;font-size:11px;white-space:nowrap}
+.sechead{font-size:13px;font-weight:800;margin:14px 2px 6px;opacity:.92}
+.card .riddle{font-size:10px;opacity:.8;line-height:1.3}
+.card .tag.new{background:linear-gradient(120deg,#ffd76a,#ff9d3c);color:#3a2404;font-weight:800}
 .card{background:rgba(255,255,255,.05);border:1px solid var(--edge);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px}
 .card .sw{height:64px;border-radius:8px;margin-bottom:2px;position:relative;overflow:hidden}
 .card .sw img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
@@ -179,7 +189,11 @@ export class UI {
       this.filterBar.appendChild(c);
     }
     this.shopPanel.appendChild(this.filterBar);
-    this.catalog = el('div', 'catalog'); this.shopPanel.appendChild(this.catalog);
+    this.keeperBar = el('div', 'keeperbar'); this.shopPanel.appendChild(this.keeperBar);
+    this.shopScroll = el('div', 'cscroll'); this.shopPanel.appendChild(this.shopScroll);
+    this.catalog = el('div', 'catalog'); this.shopScroll.appendChild(this.catalog);
+    this.deliverySec = el('div'); this.shopScroll.appendChild(this.deliverySec);
+    this.secretSec = el('div'); this.shopScroll.appendChild(this.secretSec);
 
     // Fish Book — the collection: silhouettes until you've owned one
     this.bookPanel = this._panel('book', '📖 My Fish Book');
@@ -192,7 +206,8 @@ export class UI {
     }
     this.bookPanel.appendChild(this.bookTabs);
     this.bookBar = el('div', 'bookbar'); this.bookPanel.appendChild(this.bookBar);
-    this.bookGrid = el('div', 'catalog'); this.bookPanel.appendChild(this.bookGrid);
+    const bs = el('div', 'cscroll'); this.bookPanel.appendChild(bs);
+    this.bookGrid = el('div', 'catalog'); bs.appendChild(this.bookGrid);
 
     // Care
     this.carePanel = this._panel('care', '🧽 Tank Care');
@@ -297,9 +312,12 @@ export class UI {
   }
 
   buildCatalog() {
-    const { allSpecies, sim, speciesMap } = this.o;
+    const { allSpecies, sim, keeper } = this.o;
     const water = sim.state.current;
-    let list = allSpecies.filter(s => s.water === water);
+    const un = keeper ? keeper.unlocked() : null;
+    const fresh = keeper ? new Set((keeper.latestWeekly()?.ids || [])) : new Set();
+    const secretsWon = keeper ? new Set(keeper.k.secrets) : new Set();
+    let list = allSpecies.filter(s => s.water === water && (!un || un.has(s.id)));
     const f = this.shopFilter;
     if (f === 'peaceful') list = list.filter(s => s.temperament === 'peaceful' && (s.kind||'fish') === 'fish');
     else if (f === 'schooling') list = list.filter(s => s.minSchool >= 4);
@@ -307,27 +325,69 @@ export class UI {
     else if (f === 'pred') list = list.filter(s => s.predator);
     else if (f === 'invert') list = list.filter(s => (s.kind) === 'invert');
     else if (f === 'cheap') list = list.filter(s => s.price < 15);
-    list.sort((a, b) => a.price - b.price);
+    list.sort((a, b) => (fresh.has(b.id) - fresh.has(a.id)) || a.price - b.price);
+
+    // keeper level + progress toward the next delivery
+    if (keeper) {
+      const k = keeper.k, need = keeper.xpNeed();
+      this.keeperBar.innerHTML =
+        `<span class="lvl">🎖️ Keeper Lv ${k.level}</span>` +
+        `<div class="track"><i style="width:${Math.min(100, Math.round(k.xp / need * 100))}%"></i></div>` +
+        `<span class="xp">${k.xp}/${need} to next delivery</span>`;
+    }
 
     this.catalog.innerHTML = '';
     for (const s of list) {
       const c = el('div', 'card');
       const tags = [];
-      if (s.predator) tags.push('predator');
-      if (s.minSchool >= 4) tags.push(`school ${s.minSchool}+`);
-      if ((s.tags||[]).includes('soloOnly')) tags.push('solo');
-      if ((s.tags||[]).includes('expertDiet')) tags.push('expert');
-      if (s.kind === 'invert') tags.push('invert');
+      if (fresh.has(s.id)) tags.push(['new', '🆕 this week']);
+      if (secretsWon.has(s.id)) tags.push(['new', '✨ secret']);
+      if (s.predator) tags.push([null, 'predator']);
+      if (s.minSchool >= 4) tags.push([null, `school ${s.minSchool}+`]);
+      if ((s.tags||[]).includes('soloOnly')) tags.push([null, 'solo']);
+      if ((s.tags||[]).includes('expertDiet')) tags.push([null, 'expert']);
+      if (s.kind === 'invert') tags.push([null, 'invert']);
       c.append(this._thumb(s),
         el('div', 'cn', s.common),
         el('div', 'cs', s.scientific),
-        el('div', 'meta', `<span class="tag">${dietEmojis(s)}</span><span class="tag">${s.adultSizeCm}cm</span><span class="tag">${s.care}</span>` + tags.map(t => `<span class="tag">${t}</span>`).join('')));
+        el('div', 'meta', `<span class="tag">${dietEmojis(s)}</span><span class="tag">${s.adultSizeCm}cm</span><span class="tag">${s.care}</span>` + tags.map(([cls, t]) => `<span class="tag${cls ? ' ' + cls : ''}">${t}</span>`).join('')));
       const buy = el('button', null, `Add • ${s.price}🪙`);
       buy.onclick = () => this._tryBuy(s);
       c.appendChild(buy);
       this.catalog.appendChild(c);
     }
     if (!list.length) this.catalog.appendChild(el('div', null, 'No fish match that filter.'));
+
+    // next delivery: the shapes of what good care brings next
+    this.deliverySec.innerHTML = '';
+    const next = keeper ? keeper.nextDelivery(water) : [];
+    if (next.length) {
+      this.deliverySec.appendChild(el('div', 'sechead', '🚚 Next delivery — keep caring to unlock!'));
+      const g = el('div', 'catalog'); this.deliverySec.appendChild(g);
+      for (const s of next) {
+        const c = el('div', 'card'); c.style.opacity = 0.7;
+        const sw = this._thumb(s, true); sw.appendChild(el('span', 'qm', '🔒'));
+        c.append(sw, el('div', 'cn', s.common), el('div', 'cs', 'Arriving soon…'));
+        g.appendChild(c);
+      }
+    }
+
+    // secret fish: riddle cards until earned
+    this.secretSec.innerHTML = '';
+    if (keeper) {
+      const locked = SECRETS.filter(d => !secretsWon.has(d.id) && keeper.byId[d.id] && keeper.byId[d.id].water === water);
+      if (locked.length) {
+        this.secretSec.appendChild(el('div', 'sechead', '✨ Secret fish — can you figure them out?'));
+        const g = el('div', 'catalog'); this.secretSec.appendChild(g);
+        for (const d of locked) {
+          const s = keeper.byId[d.id];
+          const c = el('div', 'card'); c.style.opacity = 0.75;
+          const sw = this._thumb(s, true); sw.appendChild(el('span', 'qm', d.emoji));
+          c.append(sw, el('div', 'cn', '???'), el('div', 'riddle', d.hint));
+          g.appendChild(c);
+        }
+      }
+    }
   }
 
   _tryBuy(spec) {
