@@ -151,7 +151,7 @@ export class Swarm {
       // growth: juveniles render smaller and are easier prey; adults full size
       const rec = this.sim._index.get(a.instId);
       const growth = rec?.growth ?? 1;
-      a.growFactor = (rec?.var ?? 1) * (0.45 + 0.55 * growth);
+      a.growFactor = (rec?.var ?? 1) * (0.35 + 0.65 * growth);
       a.bodyCm = (a.spec.adultSizeCm || 5) * (0.4 + 0.6 * growth);
       if (a.sessile) { this._animateSessile(a, time); continue; }
       if (a.crawler) { this._animateCrawler(a, dt, time); continue; }

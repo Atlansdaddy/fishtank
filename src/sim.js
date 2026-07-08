@@ -17,13 +17,15 @@ function blankTank() {
 }
 
 export class CareSim {
-  constructor() {
+  constructor(speciesMap) {
+    this.species = speciesMap || null;   // id -> spec, used for breeding
     this.state = {
       version: 2,
       coins: SIM.STARTING_COINS,
       current: 'fresh',
       lastSeen: Date.now(),
       tanks: { fresh: blankTank(), salt: blankTank() },
+      discovered: [],                    // species ids ever owned (the Fish Book)
       unlocked: true,
     };
     this._index = new Map();     // instId -> fish record (active tank)
@@ -66,6 +68,12 @@ export class CareSim {
     };
     this.tank.fish.push(f);
     this._index.set(f.id, f);
+    // Fish Book: first time this species is ever owned
+    this.state.discovered ??= [];
+    if (!this.state.discovered.includes(spec.id)) {
+      this.state.discovered.push(spec.id);
+      f.newSpecies = true;
+    }
     return f;
   }
   removeFishById(id) {
@@ -142,6 +150,29 @@ export class CareSim {
       if (f.health <= 0 && !f.dead) {
         f.dead = true;
         this.events.push({ type: 'death', id: f.id, name: f.name, sp: f.sp });
+      }
+    }
+
+    // Livebearers really do this: 2+ healthy adults in clean water -> fry
+    if (this.species && t.water > 0.6) {
+      const groups = {};
+      for (const f of t.fish) {
+        if (f.dead || (f.growth ?? 1) < 1 || f.health < 0.7) continue;
+        const sp = this.species[f.sp];
+        if (sp && sp.archetype === 'livebearer') (groups[f.sp] ??= []).push(f);
+      }
+      for (const spId of Object.keys(groups)) {
+        if (groups[spId].length < 2) continue;
+        if (Math.random() >= Math.min(0.5, hours / SIM.BREED_HOURS)) continue;
+        const sp = this.species[spId];
+        const born = [];
+        for (let i = 0, n = 1 + Math.floor(Math.random() * 3); i < n; i++) {
+          if (this.capacityLeft() < (sp.bioload || 1) || t.fish.length >= CAPACITY.maxFish) break;
+          const baby = this.addFish(sp);
+          baby.growth = 0.1; baby.hunger = 0.3;   // tiny fry
+          born.push(baby.id);
+        }
+        if (born.length) this.events.push({ type: 'birth', sp: spId, ids: born, name: sp.common });
       }
     }
   }

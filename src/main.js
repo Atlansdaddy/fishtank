@@ -82,7 +82,7 @@ function refreshThemeColors() {
 // ---- world systems ----
 const tankView = buildTank(scene, renderer);
 let fogBase = WATER_THEMES.fresh.fogDensity;
-const sim = new CareSim();
+const sim = new CareSim(SPECIES);
 const snd = new Sound();
 const food = new FoodSystem(scene);
 const swarm = new Swarm(scene, sim, food);
@@ -157,6 +157,10 @@ const ui = new UI({
     sim.save(); ui.refreshHUD();
     snd.coin();
     ui.toast(`Welcome, your new baby ${spec.common}! 🎉`, 2400);
+    if (rec.newSpecies) {
+      sim.addCoins(5);
+      setTimeout(() => { ui.toast('📖 New species discovered! +5🪙 — check your Fish Book!', 3400); snd.chime(); ui.refreshHUD(); }, 2600);
+    }
   },
   onWaterChange: () => { sim.waterChange(); sim.save(); ui.refreshHUD(); ui.toast('💧 Fresh, clean water!'); },
   onScrub: () => { sim.scrubAlgae(1); sim.save(); ui.refreshHUD(); ui.toast('🧽 Sparkling glass!'); },
@@ -168,6 +172,7 @@ const ui = new UI({
 });
 
 function switchTank(which) {
+  if (typeof clearSurprises === 'function') clearSurprises();
   sim.switchTank(which);
   tankView.setTheme(which);
   refreshThemeColors();
@@ -190,6 +195,12 @@ if (!sim.load()) {
   sim.state.current = 'fresh'; sim._reindex();
   sim.save();
 }
+
+// Fish Book backfill: everything currently owned counts as discovered
+sim.state.discovered ??= [];
+for (const which of ['fresh', 'salt'])
+  for (const f of sim.state.tanks[which].fish)
+    if (!sim.state.discovered.includes(f.sp)) sim.state.discovered.push(f.sp);
 
 // offline decay + welcome-back coins
 const offlineHours = sim.applyOffline();
@@ -218,9 +229,12 @@ if (offlineHours > 0.2) {
   reapAllTanks(true);
   setTimeout(() => {
     const grown = evs.filter(e => e.type === 'grown');
+    const births = evs.filter(e => e.type === 'birth');
     if (evs.some(e => e.type === 'death')) {
       const names = evs.filter(e => e.type === 'death').map(e => e.name);
       ui.toast(`😢 While you were gone, ${names.slice(0,2).join(' & ')}${names.length>2?' and others':''} didn't make it. Keep your tank healthy!`, 5200);
+    } else if (births.length) {
+      ui.toast(`🍼 Surprise! Your ${births[0].name}s had babies while you were away!`, 5000);
     } else if (grown.length) {
       ui.toast(`🎉 ${grown.slice(0,2).map(e => e.name).join(' & ')}${grown.length>2?' and others':''} grew up while you were away!`, 4600);
     } else if (earned > 0) {
@@ -297,6 +311,17 @@ function pinchDistance() {
 function tapSelect(px, py) {
   ndc.x = (px / innerWidth) * 2 - 1; ndc.y = -(py / innerHeight) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
+  // surprises (treasure, molts, eggs) grab the tap first
+  const sObjs = surprises.list.filter(s => s.obj).map(s => s.obj);
+  if (sObjs.length) {
+    const sHits = raycaster.intersectObjects(sObjs, true);
+    if (sHits.length) {
+      let o = sHits[0].object;
+      while (o && !o.userData.surprise) o = o.parent;
+      const s = surprises.list.find(x => x.obj === o);
+      if (s) { openSurprise(s, px, py); return; }
+    }
+  }
   const hits = raycaster.intersectObjects(swarm.agents.map(a => a.obj), true);
   if (hits.length) {
     let o = hits[0].object;
@@ -308,6 +333,7 @@ function tapSelect(px, py) {
       cam.targetRadius = THREE.MathUtils.clamp(size * 3.2 + 10, cam.minR, 46);  // zoom in on it
       const rec = sim._index.get(a.instId);
       if (rec) { ui.showFishCard(rec, SPECIES[rec.sp]); a.startle = 0.4; snd.chime(); }
+      else if (a.visitor) { ui.showSpeciesFacts(SPECIES[a.spec.id]); a.startle = 0.4; snd.chime(); }
     }
   } else {
     cam.follow = null;                  // tapped empty water: stop following
@@ -315,6 +341,129 @@ function tapSelect(px, py) {
   }
 }
 function fitWholeTank() { cam.follow = null; cam.targetRadius = cam.fitR; cam.el = 0.12; ui.hideFishCard(); }
+
+// ---- surprise events: rare, unannounced, variable — the boredom killers ----
+const surprises = { list: [], timer: 45 + Math.random() * 60 };
+
+function chestMesh() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a26, roughness: 0.8 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0xc9a227, metalness: 0.7, roughness: 0.3 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(5, 2.6, 3.4), wood); base.position.y = 1.3; g.add(base);
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 5, 10, 1, false, 0, Math.PI), wood);
+  lid.rotation.z = Math.PI / 2; lid.position.y = 2.6; g.add(lid);
+  const band = new THREE.Mesh(new THREE.BoxGeometry(5.1, 0.5, 3.5), trim); band.position.y = 2.0; g.add(band);
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a }));
+  glow.position.y = 3.4; g.add(glow); g.userData.glow = glow;
+  for (const c of g.children) c.castShadow = true;
+  return g;
+}
+function moltMesh() {
+  const m = new THREE.MeshStandardMaterial({ color: 0xfff1ea, transparent: true, opacity: 0.55, roughness: 0.3, side: THREE.DoubleSide });
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.45, 8, 12, Math.PI * 1.15), m);
+  body.rotation.z = -0.5; body.position.y = 1.0; g.add(body);
+  return g;
+}
+function eggsMesh() {
+  const g = new THREE.Group();
+  const m = new THREE.MeshStandardMaterial({ color: 0xfff8f0, transparent: true, opacity: 0.85, roughness: 0.35 });
+  for (let i = 0; i < 8; i++) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 8), m);
+    e.position.set(Math.cos(i * 2.4) * 0.7, Math.sin(i * 1.7) * 0.7, (i % 3) * 0.25);
+    g.add(e);
+  }
+  return g;
+}
+function addSurprise(kind, obj, extra = {}) {
+  if (obj) { obj.userData.surprise = true; scene.add(obj); }
+  surprises.list.push({ kind, obj, ...extra });
+}
+function spawnTreasure() {
+  const c = chestMesh();
+  c.position.set(THREE.MathUtils.randFloat(BOUNDS.minX + 8, BOUNDS.maxX - 8), TANK.SAND_H, THREE.MathUtils.randFloat(BOUNDS.minZ + 6, BOUNDS.maxZ - 6));
+  c.rotation.y = Math.random() * 6;
+  addSurprise('treasure', c, { ttl: 150, coins: 10 + Math.floor(Math.random() * 31) });
+}
+function spawnMolt() {
+  const shrimp = swarm.agents.find(a => a.spec.archetype === 'shrimp');
+  if (!shrimp) return;
+  const s = moltMesh();
+  s.position.set(shrimp.pos.x + 3, TANK.SAND_H, shrimp.pos.z);
+  addSurprise('molt', s, { ttl: 200, coins: 5, name: sim._index.get(shrimp.instId)?.name || 'Your shrimp' });
+  ui.toast(`🦐 ${sim._index.get(shrimp.instId)?.name || 'Your shrimp'} molted its shell!`, 3000);
+}
+function spawnSnailEggs() {
+  const snail = swarm.agents.find(a => a.spec.archetype === 'snail');
+  if (!snail) return;
+  const e = eggsMesh();
+  e.position.set(THREE.MathUtils.randFloat(BOUNDS.minX + 8, BOUNDS.maxX - 8), 14 + Math.random() * 16, TANK.D / 2 - 1.6);
+  addSurprise('eggs', e, { ttl: 100 + Math.random() * 80, spec: snail.spec });
+  ui.toast('🥚 Snail eggs appeared on the glass!', 3000);
+}
+function spawnVisitor() {
+  const water = sim.state.current;
+  const pool = ALL.filter(s => s.water === water && (s.kind || 'fish') === 'fish' && !s.predator);
+  if (!pool.length) return;
+  const spec = pool[Math.floor(Math.random() * pool.length)];
+  const obj = buildFish(spec, WATER_THEMES[water]);
+  obj.userData.mat.envMapIntensity = 1.0;
+  const a = new Agent(spec, obj, 'visitor_' + Math.floor(Math.random() * 1e6));
+  a._dietSet = new Set(spec.diet || ['flake']);
+  a._schools = false;
+  a._foodValue = () => 0.2;
+  a.visitor = true;
+  obj.userData.agentRef = a;
+  swarm.add(a);
+  addSurprise('visitor', null, { ttl: 55 + Math.random() * 35, agent: a, name: spec.common });
+  ui.toast(`👀 A wild ${spec.common} is visiting your tank!`, 3400);
+}
+function rollSurprise() {
+  const opts = [['treasure', 0.34], ['visitor', 0.28]];
+  if (swarm.agents.some(a => a.spec.archetype === 'shrimp')) opts.push(['molt', 0.22]);
+  if (swarm.agents.some(a => a.spec.archetype === 'snail')) opts.push(['eggs', 0.16]);
+  let r = Math.random() * opts.reduce((s, o) => s + o[1], 0);
+  for (const [k, w] of opts) { r -= w; if (r <= 0) return ({ treasure: spawnTreasure, molt: spawnMolt, eggs: spawnSnailEggs, visitor: spawnVisitor })[k](); }
+}
+function openSurprise(s, px, py) {
+  if (s.kind === 'treasure') {
+    sim.addCoins(s.coins); sim.save();
+    ui.toast(`💰 Treasure! +${s.coins}🪙`, 3200); snd.coin();
+    for (let i = 0; i < 6; i++) setTimeout(() => spawnSparkle(px + (Math.random() - 0.5) * 60, py + (Math.random() - 0.5) * 60), i * 70);
+    removeSurprise(s); ui.refreshHUD();
+  } else if (s.kind === 'molt') {
+    sim.addCoins(s.coins); sim.save();
+    ui.toast(`🦐 An empty shell! Shrimp shed their shells to grow. +${s.coins}🪙`, 4200); snd.chime();
+    removeSurprise(s); ui.refreshHUD();
+  } else if (s.kind === 'eggs') {
+    ui.toast('🥚 Snail eggs — keep watching, they hatch soon!', 3000);
+  }
+}
+function removeSurprise(s) {
+  if (s.obj) scene.remove(s.obj);
+  surprises.list = surprises.list.filter(x => x !== s);
+}
+function expireSurprise(s) {
+  if (s.kind === 'eggs') {
+    if (sim.capacityLeft() >= (s.spec.bioload || 1)) {
+      const rec = sim.addFish(s.spec);
+      rec.growth = 0.15;
+      const a = makeAgent(rec); if (a) swarm.add(a);
+      sim.save(); ui.refreshHUD();
+      ui.toast('🐌 The snail eggs hatched — a free baby snail!', 4200); snd.coin();
+    }
+  } else if (s.kind === 'visitor') {
+    if (s.agent.alive) swarm.remove(s.agent);
+    ui.toast(`👋 The wild ${s.name} swam away…`, 2600);
+  }
+  removeSurprise(s);
+}
+function clearSurprises() {
+  for (const s of [...surprises.list]) { if (s.obj) scene.remove(s.obj); if (s.kind === 'visitor' && s.agent.alive) swarm.remove(s.agent); }
+  surprises.list = [];
+}
+// a treasure might be waiting when the app opens (variable reward on arrival)
+if (Math.random() < 0.3) setTimeout(spawnTreasure, 3000);
 
 // sparkle overlay for wiping feedback
 const sparkleLayer = document.createElement('div');
@@ -376,6 +525,19 @@ function frame() {
   swarm.update(dt, t);
   tankView.update(t);
 
+  // surprise events: occasional rolls, glow pulses, lifetimes
+  surprises.timer -= dt;
+  if (surprises.timer <= 0) {
+    surprises.timer = 100 + Math.random() * 140;
+    if (surprises.list.length < 2) rollSurprise();
+  }
+  for (const s of [...surprises.list]) {
+    s.ttl -= dt;
+    const glow = s.obj?.userData?.glow;
+    if (glow) glow.scale.setScalar(1 + Math.sin(t * 3) * 0.3);
+    if (s.ttl <= 0) expireSurprise(s);
+  }
+
   // decor sway
   for (const c of decorGroup.children) if (c.userData.sway !== undefined) c.rotation.z = Math.sin(t * 0.8 + c.userData.sway) * 0.12;
 
@@ -387,6 +549,11 @@ function frame() {
     for (const e of evs) {
       if (e.type === 'death') { ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200); snd.sad(); }
       else if (e.type === 'grown') { ui.toast(`🎉 ${e.name} is all grown up!`, 3600); snd.coin(); }
+      else if (e.type === 'birth') {
+        for (const id of e.ids) { const rec = sim._index.get(id); if (rec) { const a = makeAgent(rec); if (a) swarm.add(a); } }
+        ui.toast(`🍼 Your ${e.name}s had ${e.ids.length === 1 ? 'a baby' : e.ids.length + ' babies'}!!`, 4600);
+        snd.coin(); sim.save(); ui.refreshHUD();
+      }
     }
     ui.refreshHUD();
   }
@@ -424,4 +591,5 @@ frame();
 
 // expose a little for debugging
 window.__tank = { sim, swarm, food, SPECIES, switchTank, ui, cam, camera, fitWholeTank,
-  setHour: (h) => { hourOverride = h; }, dayFactor: () => df };
+  setHour: (h) => { hourOverride = h; }, dayFactor: () => df,
+  surprises, spawn: { treasure: spawnTreasure, molt: spawnMolt, eggs: spawnSnailEggs, visitor: spawnVisitor } };

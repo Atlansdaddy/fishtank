@@ -16,9 +16,9 @@ const CSS = `
 .pill .bar>i{display:block;height:100%;border-radius:3px;transition:width .4s,background .4s}
 .tankname{font-weight:800;letter-spacing:.3px}
 .coins{margin-left:auto}
-.toolbar{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0) + 12px);display:flex;justify-content:center;align-items:flex-start;gap:10px;pointer-events:none}
+.toolbar{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0) + 12px);display:flex;justify-content:center;align-items:flex-start;gap:8px;pointer-events:none}
 .toolwrap{pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:5px}
-.tool{pointer-events:auto;width:58px;height:58px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s;color:var(--txt)}
+.tool{pointer-events:auto;width:52px;height:52px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.35);transition:transform .12s;color:var(--txt)}
 .tool:active{transform:scale(.9)}
 .tool-cap{font-size:11px;font-weight:700;opacity:.92;pointer-events:none;text-shadow:0 1px 3px rgba(0,0,0,.7)}
 .panel{position:absolute;left:0;right:0;bottom:0;max-height:74%;background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--edge);border-radius:22px 22px 0 0;transform:translateY(110%);transition:transform .28s cubic-bezier(.2,.8,.2,1);pointer-events:auto;padding:14px 14px calc(env(safe-area-inset-bottom,0) + 18px);overflow:hidden;display:flex;flex-direction:column}
@@ -33,6 +33,10 @@ const CSS = `
 .catalog{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:2px}
 .card{background:rgba(255,255,255,.05);border:1px solid var(--edge);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px}
 .card .sw{height:34px;border-radius:8px;margin-bottom:2px}
+.card .sw.q{display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;opacity:.6;background:rgba(255,255,255,.06)!important}
+.bookbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13px;font-weight:700}
+.bookbar .track{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
+.bookbar .track>i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .4s}
 .card .cn{font-weight:700;font-size:13px}
 .card .cs{font-size:10px;font-style:italic;opacity:.65}
 .card .meta{font-size:10px;opacity:.75;display:flex;flex-wrap:wrap;gap:4px}
@@ -116,6 +120,7 @@ export class UI {
     };
     mk('🔭', 'View', () => this.o.onFitView && this.o.onFitView());
     mk('🍽️', 'Feed', () => this.toggle('feed'));
+    mk('📖', 'Book', () => { this.buildBook(); this.toggle('book'); });
     mk('🛒', 'Shop', () => { this.buildCatalog(); this.toggle('shop'); });
     mk('🧽', 'Care', () => { this.refreshCare(); this.toggle('care'); });
     mk('🔀', 'Tank', () => this.o.onSwitchTank());
@@ -154,6 +159,19 @@ export class UI {
     this.shopPanel.appendChild(this.filterBar);
     this.catalog = el('div', 'catalog'); this.shopPanel.appendChild(this.catalog);
 
+    // Fish Book — the collection: silhouettes until you've owned one
+    this.bookPanel = this._panel('book', '📖 My Fish Book');
+    this.bookTab = 'fresh';
+    this.bookTabs = el('div', 'filterbar');
+    for (const [key, lab] of [['fresh', '🌿 Freshwater'], ['salt', '🐚 Saltwater'], ['invert', '🐌 Inverts']]) {
+      const c = el('button', 'chip' + (key === 'fresh' ? ' on' : ''), lab); c.dataset.k = key;
+      c.onclick = () => { this.bookTab = key; [...this.bookTabs.children].forEach(x => x.classList.toggle('on', x === c)); this.buildBook(); };
+      this.bookTabs.appendChild(c);
+    }
+    this.bookPanel.appendChild(this.bookTabs);
+    this.bookBar = el('div', 'bookbar'); this.bookPanel.appendChild(this.bookBar);
+    this.bookGrid = el('div', 'catalog'); this.bookPanel.appendChild(this.bookGrid);
+
     // Care
     this.carePanel = this._panel('care', '🧽 Tank Care');
     const actions = el('div', 'care-actions');
@@ -174,13 +192,40 @@ export class UI {
 
   toggle(id) {
     if (this.hint) this.hint.style.opacity = 0;
-    const panels = { feed: this.feedPanel, shop: this.shopPanel, care: this.carePanel };
+    const panels = { feed: this.feedPanel, shop: this.shopPanel, care: this.carePanel, book: this.bookPanel };
     const target = panels[id];
     const wasOpen = target.classList.contains('open');
     for (const p of Object.values(panels)) p.classList.remove('open');
     if (!wasOpen) target.classList.add('open');
   }
-  closePanels() { for (const p of [this.feedPanel, this.shopPanel, this.carePanel]) p.classList.remove('open'); }
+  closePanels() { for (const p of [this.feedPanel, this.shopPanel, this.carePanel, this.bookPanel]) p.classList.remove('open'); }
+
+  buildBook() {
+    const { allSpecies, sim } = this.o;
+    const dis = new Set(sim.state.discovered || []);
+    const tab = this.bookTab;
+    const list = tab === 'invert'
+      ? allSpecies.filter(s => (s.kind || 'fish') === 'invert')
+      : allSpecies.filter(s => s.water === tab && (s.kind || 'fish') === 'fish');
+    list.sort((a, b) => a.common.localeCompare(b.common));
+    const found = list.filter(s => dis.has(s.id)).length;
+    this.bookBar.innerHTML = `<span>${found} / ${list.length} discovered</span><div class="track"><i style="width:${Math.round(found / list.length * 100)}%"></i></div>`;
+    this.bookGrid.innerHTML = '';
+    for (const s of list) {
+      const c = el('div', 'card');
+      if (dis.has(s.id)) {
+        const sw = el('div', 'sw');
+        sw.style.background = `linear-gradient(120deg, ${s.colors.base}, ${s.colors.patternColor || s.colors.fin || s.colors.base})`;
+        c.append(sw, el('div', 'cn', s.common), el('div', 'cs', s.scientific));
+        c.style.cursor = 'pointer';
+        c.onclick = () => this.showSpeciesFacts(s);
+      } else {
+        c.append(el('div', 'sw q', '?'), el('div', 'cn', '???'), el('div', 'cs', 'Not discovered yet'));
+        c.style.opacity = 0.65;
+      }
+      this.bookGrid.appendChild(c);
+    }
+  }
 
   flash(p) { p.style.transform = 'translateY(4px)'; setTimeout(() => p.style.transform = '', 120); }
 
