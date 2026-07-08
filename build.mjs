@@ -20,12 +20,21 @@ const html = `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Habitat">
 <meta name="theme-color" content="#02110f">
-<title>Aqua — My Fish Tank</title>
+<title>Habitat — My Fish Tank</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <style>html,body{margin:0;height:100%;background:#02110f;overscroll-behavior:none;touch-action:none}</style>
 </head>
 <body>
 <script>${js}</script>
+<script>
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
 </body>
 </html>`;
 

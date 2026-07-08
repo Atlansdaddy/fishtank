@@ -5,7 +5,8 @@ import { extname, join, normalize } from 'path';
 const ROOT = '/root/fishtank';
 const PORT = 5178;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
-  '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml' };
+  '.png': 'image/png', '.json': 'application/json', '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json' };
 
 createServer(async (req, res) => {
   try {
