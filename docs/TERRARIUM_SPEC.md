@@ -65,11 +65,12 @@ Foods (`FOODS` sibling, same field shape — `floatTime`/`sinkSpeed` become
 | `fruit` | Fruit Mash | 🍌 | crested gecko, hisser, isopods | static dish |
 | `mouse` | Frozen Mouse | 🍖 | snakes only | placed with tongs; snake slow-approach + strike; **design decision for John** — see note |
 
-> **Note for John:** snakes eating mice is the one content-rating question in
-> this pack. Options: (a) show it — it's nature, handled matter-of-factly like
-> the existing predator/prey eating in `Swarm._devour`; (b) "feeding day"
-> happens as an offline event ("Noodle ate today, she's sleepy"). Spec assumes
-> (a) with no gore — swallow animation is a scale-down, same as fish.
+> **DECIDED (John, 2026-07-08): parent toggle, default (a).** A settings
+> toggle ("Snake feeding") with three modes: (a) **shown** — tongs place the
+> mouse, slow approach, strike, scale-down swallow, no gore, matter-of-fact
+> like `Swarm._devour` (DEFAULT); (b) **off-screen** — feeding day happens as
+> an offline event ("Noodle ate today, she's sleepy"); (c) **substitute** —
+> snake eats eggs on screen, real diet still stated honestly in the facts.
 
 `rules.js` `evaluateAdd()` runs **unchanged**: bioload = enclosure space,
 `soloOnly` tag covers tarantulas/mantises/chameleons/ball python, predator

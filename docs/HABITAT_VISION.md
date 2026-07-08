@@ -26,16 +26,24 @@ no dark patterns, safe for a 6-year-old to own outright.
 
 | # | Habitat | Status | The "can't have" hook |
 |---|---------|--------|----------------------|
-| 1 | **Aquarium** | Live (fresh + salt, 154 species) | A 120-gallon show tank in your pocket |
+| 1 | **Aquarium** | Live (fresh + salt, 178 species) | A 120-gallon show tank in your pocket |
 | 2 | **Terrarium** | Next — cheap build, max engine reuse | Snakes, geckos, tarantulas, dart frogs |
-| 3 | **Ant Farm** | The big swing — new sim tech | A living colony that digs while you sleep |
-| 4 | **Paludarium** | Later — merges 1+2 tech | Half water, half land: crabs, mudskippers, frogs |
+| 3 | **Firefly Jar** | Quick win on terrarium tech | The summer-night jar you never got to keep |
+| 4 | **Ant Farm** | The big swing — new sim tech | A living colony that digs while you sleep |
+| 5 | **Tide Pool** | Aquarium tech + tides | The beach you can't take home (octopus!) |
+| 6 | **Bee Hive** | Ant-farm tech sibling | An observation hive; nobody's mom allows bees |
+| 7 | **Paludarium** | Merges 1+2 tech; absorbs pond + crabitat | Half water, half land: mudskippers, turtles, hermit crabs |
+| 8 | **Butterfly Garden** | Flight tech intro | Metamorphosis over real days |
+| 9 | **Aviary** | Full flight tech | The parrot/owl every kid begs for |
+| 10 | **Paleo Paddock** | Finale — reuses every family | Extinct animals: the ultimate pet you can't have |
 
-Sequencing logic: Terrarium reuses ~80% of the engine (glass box, care meters,
-crawler locomotion, shop rules) and proves the "habitat pack" split
-(`docs/ENGINE_SPLIT.md`). Ant Farm is the marquee feature that no competitor
-has and funds itself on word-of-mouth ("my ants dug a new room last night").
-Paludarium is free once the first three exist.
+Full sequencing logic, branch names, and per-habitat tech in
+`docs/ROADMAP.md` (decided 2026-07-08 — all ten are official). Terrarium
+first because it reuses ~80% of the engine and proves the "habitat pack"
+split (`docs/ENGINE_SPLIT.md`); Ant Farm is the marquee feature no competitor
+has. The home screen stays fresh/salt-toggle-simple until the habitats are
+done and tested, then becomes a full **Pet Shop UI** designed against real
+content.
 
 ## One engine, habitat packs
 

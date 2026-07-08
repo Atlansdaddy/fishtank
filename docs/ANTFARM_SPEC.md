@@ -109,7 +109,7 @@ performance, §7).
 
 | Stage | Duration (game) | Notes |
 |---|---|---|
-| Queen (bought/founding) | permanent | The one named pet (`ui.showFishCard` card, renameable via existing `onRename`). Health = colony health. If she dies, game-over-ish: colony winds down over days — big, honest stakes. |
+| Queen (bought/founding) | permanent | The one named pet (`ui.showFishCard` card, renameable via existing `onRename`). Health = colony health. **DECIDED (John, 2026-07-08): real stakes.** Sustained severe neglect can kill her; colony winds down over days, memorial card archives to the collection book, fresh founding starts a new colony. Big escalating warnings before it ever happens (queen-weak toasts, HUD pill goes red — the kid must never be surprised). |
 | Eggs | 8 h | laid in nursery chamber, batch size scales with colony food stores |
 | Larvae | 24 h | must be fed: nurse ants carry food from store to nursery — visible chains |
 | Pupae | 24 h | inert, cocoon sprites |

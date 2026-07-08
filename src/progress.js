@@ -48,17 +48,30 @@ export class Keeper {
     }
   }
 
+  // Starting level for a pre-progression save: a small head start, hard-capped.
+  // Their discovered species stay purchasable regardless — this only controls
+  // how many UNSEEN species come pre-unlocked.
+  _startLevel(st) { return Math.max(1, Math.min(5, Math.ceil((st.discovered || []).length / 8))); }
+
   get k() {
     const st = this.sim.state;
     if (!st.keeper) {
       st.keeper = {
-        xp: 0,
-        // existing saves start at a level worthy of what they already found
-        level: Math.max(1, Math.ceil((st.discovered || []).length / 3)),
+        v: 2, xp: 0, level: this._startLevel(st),
         t0: Date.now(), weeklySeen: 0, daily: {},
         n: { feeds: 0, waters: 0, scrubs: 0, grown: 0, births: 0, treasure: 0, nights: 0, cleanDays: 0 },
         secrets: [], extras: [],
       };
+    }
+    // v1 grandfathering was far too generous (a level per 3 discoveries opened
+    // most of the catalog on day one) — re-clamp those saves once
+    if (!st.keeper.v) {
+      st.keeper.v = 2;
+      st.keeper.level = Math.min(st.keeper.level, this._startLevel(st));
+      st.keeper.xp = Math.min(st.keeper.xp, this.xpNeed(st.keeper.level) - 1);
+      // counters could have been inflated by button-mashing before the caps
+      const n = st.keeper.n;
+      n.feeds = Math.min(n.feeds, DAY_CAP.feed); n.waters = Math.min(n.waters, DAY_CAP.water); n.scrubs = Math.min(n.scrubs, DAY_CAP.scrub);
     }
     return st.keeper;
   }
@@ -66,16 +79,19 @@ export class Keeper {
   xpNeed(level = this.k.level) { return 40 + (level - 1) * 20; }
 
   // Award XP for a care action. Returns the number of levels gained (0 usually).
+  // Day caps gate BOTH the XP and the lifetime counters that secret fish read,
+  // so button-mashing can't speed up either (a secret like "feed 30 times"
+  // means 10+ real days of feeding, not 3 minutes of tapping).
   award(kind, mult = 1) {
     const k = this.k;
     const today = new Date().toDateString();
     if (k.daily.d !== today) k.daily = { d: today };
-    const counter = { feed: 'feeds', water: 'waters', scrub: 'scrubs', grown: 'grown', birth: 'births' }[kind];
-    if (counter) k.n[counter] += mult;
     if (DAY_CAP[kind] != null) {
       k.daily[kind] = (k.daily[kind] || 0) + 1;
       if (k.daily[kind] > DAY_CAP[kind]) return 0;
     }
+    const counter = { feed: 'feeds', water: 'waters', scrub: 'scrubs', grown: 'grown', birth: 'births' }[kind];
+    if (counter) k.n[counter] += mult;
     k.xp += (XP_GAIN[kind] || 0) * mult;
     let ups = 0;
     while (k.xp >= this.xpNeed()) { k.xp -= this.xpNeed(); k.level++; ups++; }

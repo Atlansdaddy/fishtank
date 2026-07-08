@@ -4,6 +4,14 @@ Goal: turn the live game into `engine + habitats/aquarium` **without a single
 release where the fish tank is broken**. Every checklist step below leaves the
 game shippable; the aquarium is the reference pack and the regression test.
 
+> **DECIDED (John, 2026-07-08): incremental split, branch per habitat.** No
+> big-bang refactor. Each new habitat gets its own git branch
+> (`habitat/terrarium`, `habitat/antfarm`, …); on that branch we extract ONLY
+> the engine pieces that habitat actually needs (terrarium: meter config,
+> locomotion registry, food behaviors; ant farm: its own list), verify the
+> aquarium still passes, then merge to `main`. The 10-step checklist below is
+> the menu we pull steps from, not a phase to run up front.
+
 ## 1. What's already generic vs. aquarium-specific
 
 | Module (src/) | Verdict | Notes |
