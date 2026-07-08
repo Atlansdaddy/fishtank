@@ -1,28 +1,55 @@
-// Habitat push server — Cloudflare Worker.
-// Sends PAYLOAD-LESS Web Pushes (no encryption needed): the ping wakes the
-// game's service worker, which reads the local save and shows the right
-// message ("feeding time" / "water check") — the server never sees tank data.
+// Habitat cloud — Cloudflare Worker: cloud saves + push nudges.
 //
-// Routes:  POST /subscribe {sub}        store a push subscription
+// Cloud saves (sync-code model, no accounts):
+//          PUT  /save/<code>            store a tank save (JSON, validated)
+//          GET  /save/<code>            fetch it on another device
+// Push:    POST /subscribe {sub}        store a push subscription
 //          POST /seen {endpoint}        app was opened; reset the absence clock
 //          POST /unsubscribe {endpoint} remove
 // Cron:    every 6h — push to anyone absent >20h, at most one nudge per 20h.
+// Pushes are PAYLOAD-LESS: the ping wakes the game's service worker, which
+// reads the local save and composes the message itself.
 //
 // Bindings: KV namespace SUBS.  Secrets: VAPID_PRIVATE_JWK, VAPID_PUBLIC, CONTACT.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
   'Access-Control-Allow-Headers': 'content-type',
 };
 const ABSENT_MS = 20 * 3600 * 1000;   // nudge after this long away
 const RENUDGE_MS = 20 * 3600 * 1000;  // and at most this often
+const MAX_SAVE_BYTES = 300000;
 
 export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
-    if (req.method !== 'POST') return new Response('habitat push server', { headers: CORS });
     const url = new URL(req.url);
+
+    // ---- cloud saves ----
+    if (url.pathname.startsWith('/save/')) {
+      const code = url.pathname.slice(6).toLowerCase();
+      if (!/^[a-z0-9-]{8,48}$/.test(code)) return json({ ok: false }, 400);
+      const key = 'save:' + code;
+      if (req.method === 'GET') {
+        const rec = await env.SUBS.get(key);
+        return rec
+          ? new Response(rec, { headers: { 'content-type': 'application/json', ...CORS } })
+          : json({ ok: false }, 404);
+      }
+      if (req.method === 'PUT') {
+        const body = await req.text();
+        if (body.length > MAX_SAVE_BYTES) return json({ ok: false }, 413);
+        try { const s = JSON.parse(body); if (!s || !s.tanks) return json({ ok: false }, 400); }
+        catch (e) { return json({ ok: false }, 400); }
+        await env.SUBS.put(key, body);
+        return json({ ok: true });
+      }
+      return json({ ok: false }, 405);
+    }
+
+    // ---- push routes ----
+    if (req.method !== 'POST') return new Response('habitat cloud', { headers: CORS });
     let body;
     try { body = await req.json(); } catch (e) { return json({ ok: false }, 400); }
 

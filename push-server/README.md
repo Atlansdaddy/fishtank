@@ -1,9 +1,13 @@
-# Habitat push server (Cloudflare Worker, free tier)
+# Habitat cloud (Cloudflare Worker, free tier)
 
-Makes "🐟 Feeding time!" notifications reach a **closed** iPhone/Android app.
-Privacy-friendly: pushes carry no data — the phone's service worker reads the
-local save and picks the message itself. The server only knows "this device
-hasn't opened the app in 20+ hours."
+One tiny worker, two jobs:
+
+1. **Cloud saves** — the game auto-syncs each tank to `/save/<sync-code>`;
+   any device that enters the code pulls the same tank. No accounts, no files.
+2. **Push nudges** — "🐟 Feeding time!" notifications reach a **closed**
+   iPhone/Android app. Privacy-friendly: pushes carry no data — the phone's
+   service worker reads the local save and picks the message itself. The
+   server only knows "this device hasn't opened the app in 20+ hours."
 
 ## One-time setup (~5 minutes)
 
@@ -21,7 +25,13 @@ wrangler deploy                       # prints your worker URL
 
 ## Wire the app
 
-In `src/notify.js`, fill in:
+In `src/cloud.js` (cloud saves):
+
+```js
+export const CLOUD = { serverUrl: 'https://habitat-push.YOURNAME.workers.dev' };
+```
+
+In `src/notify.js` (push nudges):
 
 ```js
 export const PUSH = {
@@ -30,7 +40,12 @@ export const PUSH = {
 };
 ```
 
-Rebuild (`node build.mjs`), commit, push. Then on the phone: Care → 🔔 Reminders.
+Rebuild (`node build.mjs`), commit, push. Cloud sync then activates on every
+device automatically (sync code appears in Care); reminders turn on via
+Care → 🔔 Reminders.
+
+Note: cloud saves only need the KV namespace — if you skip the VAPID secrets,
+saves work and only push nudges stay off.
 
 ## Behavior
 

@@ -7,6 +7,7 @@ import { CareSim } from './sim.js';
 import { store } from './store.js';
 import { Sound } from './audio.js';
 import { Notify } from './notify.js';
+import { CloudSync } from './cloud.js';
 import { FoodSystem } from './food.js';
 import { Swarm, Agent } from './behavior.js';
 import { UI } from './ui.js';
@@ -87,6 +88,7 @@ let fogBase = WATER_THEMES.fresh.fogDensity;
 const sim = new CareSim(SPECIES);
 const snd = new Sound();
 const notify = new Notify(sim);
+const cloud = new CloudSync(sim);
 const food = new FoodSystem(scene);
 const swarm = new Swarm(scene, sim, food);
 
@@ -197,6 +199,23 @@ const ui = new UI({
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     ui.toast('💾 Backup downloaded!', 3200);
   },
+  syncEnabled: cloud.enabled,
+  syncCode: () => cloud.code,
+  onLinkDevice: async () => {
+    const code = prompt('Enter the sync code from your other device:');
+    if (!code) return;
+    const r = await cloud.pull(code);
+    if (r.ok) {
+      sim._apply(r.state);
+      sim.state.syncCode = code.toLowerCase().trim();
+      sim.state.lastSeen = Date.now();
+      sim.save();
+      switchTank(sim.state.current);
+      ui.toast('☁️ Linked! Your tank swam over. 🐠', 3800);
+    } else {
+      ui.toast(r.why === 'notfound' ? '⚠️ No tank found for that code.' : '⚠️ Could not reach the cloud right now.', 3400);
+    }
+  },
   onRestore: () => {
     const inp = document.createElement('input');
     inp.type = 'file'; inp.accept = '.json,application/json';
@@ -302,6 +321,20 @@ if (hadSave) {
 } else {
   sim.restoreFromMirror(bootT - 4000).then((ok) => {
     if (ok) { switchTank(sim.state.current); ui.refreshHUD(); ui.toast('💾 Your tank was restored from a device backup!', 4200); }
+  });
+}
+
+// cloud sync: if another device saved this tank more recently, take theirs
+if (cloud.enabled) {
+  cloud.pull().then((r) => {
+    if (r.ok && (r.state.lastSeen || 0) > sim.state.lastSeen + 5000) {
+      sim._apply(r.state);
+      sim.applyOffline();               // decay from the other device's last visit
+      switchTank(sim.state.current);
+      ui.toast('☁️ Tank synced from your other device!', 3600);
+    } else {
+      cloud.push(true);                 // we're the freshest: publish ours
+    }
   });
 }
 // gentle nudge if there's no recent manual backup
@@ -567,10 +600,10 @@ cam.radius = cam.targetRadius = cam.fitR;   // start framed on the whole tank
 // ---- persistence on background ----
 let saveTimer = 0;
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { sim.save(); notify.updateBadge(); notify.markSeen(); }
+  if (document.hidden) { sim.save(); cloud.push('unload'); notify.updateBadge(); notify.markSeen(); }
   else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
 });
-addEventListener('pagehide', () => { sim.save(); notify.updateBadge(); });
+addEventListener('pagehide', () => { sim.save(); cloud.push('unload'); notify.updateBadge(); });
 
 // ---- main loop ----
 const clock = new THREE.Clock();
@@ -654,6 +687,7 @@ function frame() {
     const s = sim.summary();
     if (s.avgHealth > 0.6 && s.count > 0) { sim.addCoins(Math.round(SIM.COINS_PER_GOOD_DAY * s.avgHealth)); ui.refreshHUD(); }
     sim.save();
+    cloud.push(); cloud.tick();
   }
 
   renderer.render(scene, camera);

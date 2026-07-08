@@ -192,6 +192,15 @@ export class UI {
     };
     bk.append(ex, im, rm);
     this.carePanel.appendChild(bk);
+    if (this.o.syncEnabled) {
+      const sy = el('div', 'msgs');
+      sy.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;flex-shrink:0';
+      sy.innerHTML = `<span>☁️ Sync code: <b style="user-select:all;letter-spacing:.5px">${this.o.syncCode()}</b></span>`;
+      const lk = el('button', 'chip', '🔗 Link another device');
+      lk.onclick = () => this.o.onLinkDevice && this.o.onLinkDevice();
+      sy.appendChild(lk);
+      this.carePanel.appendChild(sy);
+    }
     this.carePanel.appendChild(el('div', 'phint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
   }
 
