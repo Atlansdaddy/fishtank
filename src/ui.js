@@ -231,7 +231,10 @@ export class UI {
     if (this.o.syncEnabled) {
       const sy = el('div', 'msgs');
       sy.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;flex-shrink:0';
-      const code = el('span', null, `☁️ Sync code: <b style="user-select:all;letter-spacing:.5px">${this.o.syncCode()}</b> 📋`);
+      // code text fills in via refreshCare — the save loads AFTER the UI is
+      // built, and rendering it here once showed a phantom pre-load code
+      const code = el('span', null, `☁️ Sync code: <b style="user-select:all;letter-spacing:.5px">……</b> 📋`);
+      this.syncCodeEl = code.querySelector('b');
       code.style.cursor = 'pointer';
       code.onclick = async () => {
         try { await navigator.clipboard.writeText(this.o.syncCode()); this.toast('📋 Sync code copied!'); }
@@ -471,6 +474,7 @@ export class UI {
 
   refreshCare() {
     if (this.syncStat && this.o.syncStatus) this.syncStat.textContent = this.o.syncStatus();
+    if (this.syncCodeEl && this.o.syncCode) this.syncCodeEl.textContent = this.o.syncCode();
     const s = this.o.sim.summary();
     const m = this.careMeters; m.innerHTML = '';
     const meter = (lab, v, invert) => {
