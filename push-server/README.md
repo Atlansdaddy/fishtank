@@ -53,3 +53,19 @@ saves work and only push nudges stay off.
 - Dead subscriptions (uninstalled app) are cleaned up automatically on 404/410.
 - iPhone requires: iOS 16.4+, app installed to the Home Screen, reminders
   enabled from a tap (Apple rules).
+
+## Crash telemetry
+
+The game POSTs every crash (with build version, message, stack, user agent,
+PWA-or-browser) to `/crash` on this worker; crashes queue on-device while
+offline and flush on a later boot, so nothing is lost. They expire after 14
+days.
+
+Set a token once, then read them any time:
+
+```bash
+wrangler secret put REPORT_TOKEN        # pick any long random string
+curl 'https://habitat-push.YOURNAME.workers.dev/crashes?token=YOURTOKEN'
+```
+
+That URL is the daily health check — newest 50 crashes, JSON.

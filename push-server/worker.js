@@ -48,6 +48,29 @@ export default {
       return json({ ok: false }, 405);
     }
 
+    // ---- crash telemetry ----
+    if (url.pathname === '/crash' && req.method === 'POST') {
+      const body = await req.text();
+      if (body.length > 8192) return json({ ok: false }, 413);
+      try { JSON.parse(body); } catch (e) { return json({ ok: false }, 400); }
+      const key = 'crash:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8);
+      await env.SUBS.put(key, body, { expirationTtl: 14 * 86400 });
+      return json({ ok: true });
+    }
+    // GET /crashes?token=<REPORT_TOKEN secret> — newest first, for the daily check
+    if (url.pathname === '/crashes' && req.method === 'GET') {
+      if (!env.REPORT_TOKEN || url.searchParams.get('token') !== env.REPORT_TOKEN) return json({ ok: false }, 403);
+      const list = await env.SUBS.list({ prefix: 'crash:', limit: 200 });
+      const keys = list.keys.map(k => k.name).sort().reverse().slice(0, 50);
+      const out = [];
+      for (const k of keys) {
+        const v = await env.SUBS.get(k);
+        if (v) { try { out.push(JSON.parse(v)); } catch (e) {} }
+      }
+      return new Response(JSON.stringify({ count: out.length, crashes: out }, null, 1),
+        { headers: { 'content-type': 'application/json', ...CORS } });
+    }
+
     // ---- push routes ----
     if (req.method !== 'POST') return new Response('habitat cloud', { headers: CORS });
     let body;

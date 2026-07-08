@@ -1,5 +1,13 @@
 import * as esbuild from 'esbuild';
 import { readFileSync, writeFileSync } from 'fs';
+import { execSync } from 'child_process';
+
+// version stamp for crash reports + the Care panel ("is the update live?")
+let hash = 'dev';
+try { hash = execSync('git rev-parse --short HEAD').toString().trim(); } catch (e) {}
+const STAMP = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} ${hash}`;
+// crash reports go to the same worker as cloud saves — one config spot (cloud.js)
+const CLOUD_URL = (readFileSync('src/cloud.js', 'utf8').match(/serverUrl:\s*'([^']+)'/) || [])[1] || null;
 
 const result = await esbuild.build({
   entryPoints: ['src/main.js'],
@@ -30,10 +38,48 @@ const html = `<!doctype html>
 </head>
 <body>
 <script>
-// Crash reporter: a black screen must explain itself. Catches errors from the
-// game script below (including parse errors) and missing WebGL2 (old iOS,
-// Lockdown Mode), and prints them on screen so they can be reported.
+// Crash reporter: a black screen must explain itself — on screen AND to the
+// telemetry endpoint (same Cloudflare worker as cloud saves). If the worker
+// isn't reachable (offline, or not deployed yet) reports queue in localStorage
+// and flush on a later boot, so no crash is ever lost.
 (function () {
+  var V = ${JSON.stringify(STAMP)};
+  var URLBASE = ${JSON.stringify(CLOUD_URL)};
+  window.__habitatV = V;
+  var sent = 0;
+  function post(body) {
+    return fetch(URLBASE + '/crash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: body, keepalive: true });
+  }
+  function queue(body) {
+    try {
+      var q = JSON.parse(localStorage.getItem('habitat_crashq') || '[]');
+      q.push(body); localStorage.setItem('habitat_crashq', JSON.stringify(q.slice(-10)));
+    } catch (e) {}
+  }
+  function report(kind, msg, stack) {
+    try {
+      if (sent++ > 4) return;    // don't flood on error loops
+      var body = JSON.stringify({
+        kind: kind, v: V, ts: Date.now(),
+        msg: String(msg).slice(0, 500), stack: String(stack || '').slice(0, 1200),
+        ua: navigator.userAgent, url: location.href,
+        pwa: !!(matchMedia && matchMedia('(display-mode: standalone)').matches),
+        sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+      });
+      if (URLBASE) post(body).catch(function () { queue(body); });
+      else queue(body);
+    } catch (e) {}
+  }
+  window.__habitatReport = report;
+  addEventListener('load', function () {   // flush queued reports from earlier sessions
+    try {
+      if (!URLBASE) return;
+      var q = JSON.parse(localStorage.getItem('habitat_crashq') || '[]');
+      if (!q.length) return;
+      localStorage.removeItem('habitat_crashq');
+      q.forEach(function (b) { post(b).catch(function () { queue(b); }); });
+    } catch (e) {}
+  });
   function show(msg) {
     var d = document.getElementById('errbox');
     if (!d) {
@@ -43,20 +89,25 @@ const html = `<!doctype html>
       d.onclick = function () { d.remove(); };
       (document.body || document.documentElement).appendChild(d);
     }
-    d.textContent = msg + '\\n\\n(' + navigator.userAgent + ')\\nTap this box to close';
+    d.textContent = msg + '\\n\\nv' + V + '\\n(' + navigator.userAgent + ')\\nTap this box to close';
   }
   addEventListener('error', function (e) {
     show('⚠️ Habitat hit an error:\\n' + (e.message || String(e.error)) + (e.lineno ? '\\nline ' + e.lineno + ':' + e.colno : ''));
+    report('error', e.message || String(e.error), e.error && e.error.stack);
   });
   addEventListener('unhandledrejection', function (e) {
     var r = e.reason;
     show('⚠️ Habitat hit an error:\\n' + ((r && (r.stack || r.message)) || String(r)));
+    report('rejection', (r && r.message) || String(r), r && r.stack);
   });
   addEventListener('DOMContentLoaded', function () {
     try {
       var gl = document.createElement('canvas').getContext('webgl2');
-      if (!gl) show('🐟 This browser cannot show the 3D tank: WebGL2 is unavailable.\\nOn iPhone this needs iOS 15 or newer, in Safari — and Lockdown Mode must be OFF for this site (aA menu > Website Settings).');
-    } catch (err) { show('🐟 3D graphics unavailable: ' + err.message); }
+      if (!gl) {
+        show('🐟 This browser cannot show the 3D tank: WebGL2 is unavailable.\\nOn iPhone this needs iOS 15 or newer, in Safari — and Lockdown Mode must be OFF for this site (aA menu > Website Settings).');
+        report('webgl', 'WebGL2 unavailable');
+      }
+    } catch (err) { show('🐟 3D graphics unavailable: ' + err.message); report('webgl', err.message); }
   });
 })();
 </script>

@@ -1,7 +1,8 @@
 // Habitat service worker: full offline play.
 // Strategy: network-first for the game page (so updates arrive when online),
 // falling back to cache when offline; cache-first for icons/manifest.
-const CACHE = 'habitat-v2';
+// v3: purge any v2 cache that may hold a bad page cached mid-deploy
+const CACHE = 'habitat-v3';
 const PRECACHE = ['./', './index.html', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
@@ -24,8 +25,12 @@ self.addEventListener('fetch', (e) => {
     // game page: freshest wins, cache as fallback + refresh the copy
     e.respondWith(
       fetch(e.request).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => { c.put('./index.html', copy.clone()); c.put('./', copy); });
+        // never cache a bad page (a 404/partial cached mid-deploy = poisoned
+        // PWA that stays broken offline)
+        if (res.ok && res.type === 'basic') {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => { c.put('./index.html', copy.clone()); c.put('./', copy); });
+        }
         return res;
       }).catch(() => caches.match('./index.html'))
     );
@@ -34,8 +39,10 @@ self.addEventListener('fetch', (e) => {
   // everything else (icons, manifest): cache-first
   e.respondWith(
     caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, copy));
+      if (res.ok && res.type === 'basic') {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy));
+      }
       return res;
     }))
   );

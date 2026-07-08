@@ -250,6 +250,9 @@ export class UI {
       this.carePanel.appendChild(sy);
     }
     this.carePanel.appendChild(el('div', 'phint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
+    const ver = el('div', 'phint', `Habitat ${window.__habitatV || 'dev'}`);
+    ver.style.cssText = 'font-size:9px;opacity:.4;margin-top:2px';
+    this.carePanel.appendChild(ver);
   }
 
   _buildFishCard() {
