@@ -230,6 +230,8 @@ const ui = new UI({
   },
   syncEnabled: cloud.enabled,
   syncCode: () => cloud.code,
+  syncStatus: () => cloud.status(),
+  onSyncNow: () => cloud.pushNow(),
   onLinkDevice: async (code) => {
     if (!code) return;
     const r = await cloud.pull(code);

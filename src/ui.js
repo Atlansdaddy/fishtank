@@ -238,6 +238,16 @@ export class UI {
         catch (e) { this.toast('Long-press the code to copy it.'); }
       };
       const lk = el('button', 'chip', '🔗 Link another device');
+      const sn = el('button', 'chip', '☁️ Sync now');
+      sn.onclick = async () => {
+        sn.disabled = true;
+        const r = this.o.onSyncNow ? await this.o.onSyncNow() : { ok: false };
+        sn.disabled = false;
+        this.toast(r.ok ? '☁️ Tank saved to the cloud ✓' : `⚠️ Cloud save failed: ${r.why}`, 3400);
+        this.syncStat.textContent = this.o.syncStatus ? this.o.syncStatus() : '';
+      };
+      this.syncStat = el('div', null, this.o.syncStatus ? this.o.syncStatus() : '');
+      this.syncStat.style.cssText = 'font-size:11px;opacity:.75;width:100%';
       const row = el('div', 'synclink'); row.style.display = 'none';
       const inp = el('input'); inp.placeholder = 'code from other device…';
       inp.autocapitalize = 'none'; inp.autocomplete = 'off'; inp.spellcheck = false;
@@ -246,7 +256,7 @@ export class UI {
       inp.onkeydown = (e) => { if (e.key === 'Enter') go.onclick(); };
       row.append(inp, go);
       lk.onclick = () => { row.style.display = row.style.display === 'none' ? 'flex' : 'none'; if (row.style.display === 'flex') inp.focus(); };
-      sy.append(code, lk, row);
+      sy.append(code, lk, sn, this.syncStat, row);
       this.carePanel.appendChild(sy);
     }
     this.carePanel.appendChild(el('div', 'phint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
@@ -460,6 +470,7 @@ export class UI {
   hideFishCard() { this.fishCard.classList.remove('show'); this.cardBackdrop.classList.remove('show'); }
 
   refreshCare() {
+    if (this.syncStat && this.o.syncStatus) this.syncStat.textContent = this.o.syncStatus();
     const s = this.o.sim.summary();
     const m = this.careMeters; m.innerHTML = '';
     const meter = (lab, v, invert) => {
