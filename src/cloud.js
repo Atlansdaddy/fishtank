@@ -4,7 +4,7 @@
 // Dormant until CLOUD.serverUrl points at the deployed worker (push-server/).
 
 export const CLOUD = {
-  serverUrl: null,   // e.g. 'https://habitat-push.<you>.workers.dev'
+  serverUrl: 'https://habitat-push.john-d70.workers.dev',
 };
 
 export class CloudSync {
