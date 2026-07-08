@@ -5,6 +5,7 @@ import { buildFish } from './fishbuilder.js';
 import { buildInvert } from './invertbuilder.js';
 import { CareSim } from './sim.js';
 import { Sound } from './audio.js';
+import { Notify } from './notify.js';
 import { FoodSystem } from './food.js';
 import { Swarm, Agent } from './behavior.js';
 import { UI } from './ui.js';
@@ -84,6 +85,7 @@ const tankView = buildTank(scene, renderer);
 let fogBase = WATER_THEMES.fresh.fogDensity;
 const sim = new CareSim(SPECIES);
 const snd = new Sound();
+const notify = new Notify(sim);
 const food = new FoodSystem(scene);
 const swarm = new Swarm(scene, sim, food);
 
@@ -168,6 +170,15 @@ const ui = new UI({
   onFitView: () => fitWholeTank(),
   soundOn: snd.enabled,
   onToggleSound: () => snd.toggle(),
+  remindersOn: notify.enabled && notify.granted,
+  onToggleReminders: async () => {
+    if (notify.enabled && notify.granted) { notify.disable(); ui.toast('🔕 Reminders off'); return false; }
+    const r = await notify.enable();
+    if (r.ok) { ui.toast("🔔 Reminders on — we'll nudge you when the fish need care!", 3600); notify.updateBadge(); }
+    else if (r.why === 'denied') ui.toast('⚠️ Notifications are blocked for this app — allow them in Settings.', 4200);
+    else ui.toast('⚠️ This browser can\'t do notifications — use the installed app.', 3800);
+    return r.ok;
+  },
   onBackup: async () => {
     const data = sim.exportSave();
     const name = `habitat-save-${new Date().toISOString().slice(0, 10)}.json`;
@@ -550,8 +561,11 @@ cam.radius = cam.targetRadius = cam.fitR;   // start framed on the whole tank
 
 // ---- persistence on background ----
 let saveTimer = 0;
-document.addEventListener('visibilitychange', () => { if (document.hidden) sim.save(); });
-addEventListener('pagehide', () => sim.save());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { sim.save(); notify.updateBadge(); notify.markSeen(); }
+  else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+});
+addEventListener('pagehide', () => { sim.save(); notify.updateBadge(); });
 
 // ---- main loop ----
 const clock = new THREE.Clock();
@@ -599,12 +613,13 @@ function frame() {
     const dead = sim.reapDead();
     for (const id of dead) { const a = swarm.agents.find(x => x.instId === id); if (a) swarm.remove(a); }
     for (const e of evs) {
-      if (e.type === 'death') { ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200); snd.sad(); }
+      if (e.type === 'death') { ui.toast(`😢 ${e.name} has died. Check your water and feed your fish!`, 4200); snd.sad(); notify.event('😢 Sad news in your tank', `${e.name} has died. Check the water!`); }
       else if (e.type === 'grown') { ui.toast(`🎉 ${e.name} is all grown up!`, 3600); snd.coin(); }
       else if (e.type === 'birth') {
         for (const id of e.ids) { const rec = sim._index.get(id); if (rec) { const a = makeAgent(rec); if (a) swarm.add(a); } }
         ui.toast(`🍼 Your ${e.name}s had ${e.ids.length === 1 ? 'a baby' : e.ids.length + ' babies'}!!`, 4600);
         snd.coin(); sim.save(); ui.refreshHUD();
+        notify.event('🍼 Babies!!', `Your ${e.name}s just had ${e.ids.length === 1 ? 'a baby' : e.ids.length + ' babies'}!`);
       }
     }
     ui.refreshHUD();

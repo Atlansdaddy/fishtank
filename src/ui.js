@@ -185,7 +185,12 @@ export class UI {
     const bk = el('div', 'care-actions'); bk.style.cssText = 'margin-top:12px;flex-shrink:0';
     const ex = el('button', null, `<span class="e">💾</span>Backup Tank`); ex.onclick = () => this.o.onBackup && this.o.onBackup();
     const im = el('button', null, `<span class="e">📂</span>Restore`); im.onclick = () => this.o.onRestore && this.o.onRestore();
-    bk.append(ex, im);
+    const rm = el('button', null, `<span class="e">${this.o.remindersOn ? '🔔' : '🔕'}</span>Reminders`);
+    rm.onclick = async () => {
+      const on = this.o.onToggleReminders && await this.o.onToggleReminders();
+      rm.querySelector('.e').textContent = on ? '🔔' : '🔕';
+    };
+    bk.append(ex, im, rm);
     this.carePanel.appendChild(bk);
     this.carePanel.appendChild(el('div', 'phint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
   }

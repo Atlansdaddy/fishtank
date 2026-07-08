@@ -1,0 +1,11 @@
+name = "habitat-push"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# after `wrangler kv namespace create SUBS`, paste the id it prints:
+kv_namespaces = [
+  { binding = "SUBS", id = "PASTE_KV_NAMESPACE_ID_HERE" }
+]
+
+[triggers]
+crons = ["0 */6 * * *"]
