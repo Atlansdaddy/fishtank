@@ -47,6 +47,9 @@ function blankTank() {
 export class CareSim {
   constructor(speciesMap) {
     this.species = speciesMap || null;   // id -> spec, used for breeding
+    this._mirrorReady = false;           // guards the IDB mirror until the boot
+                                         // restore check settles — a fresh seed
+                                         // must never clobber a real old backup
     this.state = {
       version: 2,
       coins: SIM.STARTING_COINS,
@@ -220,8 +223,9 @@ export class CareSim {
     this.state.lastSeen = Date.now();
     const json = JSON.stringify(this.state);
     try { localStorage.setItem(SAVE_KEY, json); } catch (e) {}
-    idbPut(SAVE_KEY, json);                  // second copy, fire-and-forget
+    if (this._mirrorReady) idbPut(SAVE_KEY, json);   // second copy, fire-and-forget
   }
+  unlockMirror() { this._mirrorReady = true; this.save(); }
   _migrate(s) {
     // pre-growth saves: existing fish are adults with slight variation
     for (const which of ['fresh', 'salt']) for (const f of s.tanks[which].fish) {
@@ -243,12 +247,20 @@ export class CareSim {
     return false;
   }
   // Boot fallback: localStorage was empty/cleared — try the IndexedDB mirror.
-  async restoreFromMirror() {
+  // olderThan guards against restoring the echo of the tank we JUST seeded.
+  // Whatever the outcome, the mirror unlocks afterwards and syncs to the
+  // surviving state.
+  async restoreFromMirror(olderThan = Infinity) {
+    let restored = false;
     try {
       const raw = await idbGet(SAVE_KEY);
-      if (raw && this._apply(JSON.parse(raw))) { this.save(); return true; }
+      if (raw) {
+        const s = JSON.parse(raw);
+        if ((s.lastSeen || 0) < olderThan && this._apply(s)) restored = true;
+      }
     } catch (e) {}
-    return false;
+    this.unlockMirror();
+    return restored;
   }
   // Manual backups: the whole state as a JSON string the family can keep anywhere.
   exportSave() { this.state.lastBackup = Date.now(); this.save(); return JSON.stringify(this.state); }

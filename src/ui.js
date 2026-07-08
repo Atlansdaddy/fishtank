@@ -76,6 +76,7 @@ const CSS = `
 .toast{position:absolute;left:50%;top:64px;transform:translateX(-50%);background:var(--glass2);border:1px solid var(--edge);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:14px;padding:10px 16px;font-size:14px;font-weight:600;pointer-events:none;opacity:0;transition:opacity .3s,transform .3s;max-width:88vw;text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .hint{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);font-size:12px;opacity:.6;pointer-events:none;text-align:center;width:90%}
+.phint{font-size:12px;opacity:.6;text-align:center;margin-top:10px;line-height:1.35;flex-shrink:0}
 `;
 
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -146,7 +147,7 @@ export class UI {
       row.appendChild(b);
     }
     this.feedPanel.appendChild(row);
-    this.feedPanel.appendChild(el('div', 'hint', 'Different fish eat at different depths — try each food and watch!'));
+    this.feedPanel.appendChild(el('div', 'phint', 'Different fish eat at different depths — try each food and watch!'));
 
     // Shop
     this.shopPanel = this._panel('shop', '🛒 Fish Shop');
@@ -179,13 +180,14 @@ export class UI {
     const sc = el('button', null, `<span class="e">🧽</span>Scrub Glass`); sc.onclick = () => { this.o.onScrub(); this.refreshCare(); };
     actions.append(wc, sc);
     this.carePanel.appendChild(actions);
-    this.careMeters = el('div'); this.carePanel.appendChild(this.careMeters);
-    const bk = el('div', 'care-actions'); bk.style.marginTop = '12px';
+    this.careMeters = el('div'); this.careMeters.style.cssText = 'overflow-y:auto;min-height:0';
+    this.carePanel.appendChild(this.careMeters);
+    const bk = el('div', 'care-actions'); bk.style.cssText = 'margin-top:12px;flex-shrink:0';
     const ex = el('button', null, `<span class="e">💾</span>Backup Tank`); ex.onclick = () => this.o.onBackup && this.o.onBackup();
     const im = el('button', null, `<span class="e">📂</span>Restore`); im.onclick = () => this.o.onRestore && this.o.onRestore();
     bk.append(ex, im);
     this.carePanel.appendChild(bk);
-    this.carePanel.appendChild(el('div', 'hint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
+    this.carePanel.appendChild(el('div', 'phint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
   }
 
   _buildFishCard() {

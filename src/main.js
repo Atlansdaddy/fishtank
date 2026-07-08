@@ -221,6 +221,7 @@ function seedTank(which) {
   for (const [id, n] of STARTERS[which]) { const sp = SPECIES[id]; if (sp) for (let i = 0; i < n; i++) sim.addFish(sp); }
   sim.switchTank(prev);
 }
+const bootT = Date.now();
 const hadSave = sim.load();
 if (!hadSave) {
   seedTank('fresh'); seedTank('salt');
@@ -282,9 +283,12 @@ if (offlineHours > 0.2) {
 ui.refreshHUD();
 
 // localStorage came up empty: quietly check the IndexedDB mirror before the
-// kid sees a fresh tank he didn't ask for
-if (!hadSave) {
-  sim.restoreFromMirror().then((ok) => {
+// kid sees a fresh tank he didn't ask for. (Mirror writes stay locked until
+// this settles, so the fresh seed can't clobber a real old backup.)
+if (hadSave) {
+  sim.unlockMirror();
+} else {
+  sim.restoreFromMirror(bootT - 4000).then((ok) => {
     if (ok) { switchTank(sim.state.current); ui.refreshHUD(); ui.toast('💾 Your tank was restored from a device backup!', 4200); }
   });
 }
