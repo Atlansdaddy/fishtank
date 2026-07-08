@@ -31,6 +31,12 @@ export class Sound {
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
 
+  // Browsers keep WebAudio running in background tabs/minimized apps —
+  // suspend on hide, resume on return (allowed without a gesture since the
+  // context was already unlocked by one).
+  suspend() { if (this.ctx && this.ctx.state === 'running') this.ctx.suspend(); }
+  resume() { if (this.ctx && this.enabled && this.ctx.state === 'suspended') this.ctx.resume(); }
+
   toggle() {
     this.enabled = !this.enabled;
     store.set('fishtank_sound', this.enabled ? 'on' : 'off');

@@ -601,10 +601,10 @@ cam.radius = cam.targetRadius = cam.fitR;   // start framed on the whole tank
 // ---- persistence on background ----
 let saveTimer = 0;
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { sim.save(); cloud.push('unload'); notify.updateBadge(); notify.markSeen(); }
-  else if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {});
+  if (document.hidden) { snd.suspend(); sim.save(); cloud.push('unload'); notify.updateBadge(); notify.markSeen(); }
+  else { snd.resume(); if (navigator.clearAppBadge) navigator.clearAppBadge().catch(() => {}); }
 });
-addEventListener('pagehide', () => { sim.save(); cloud.push('unload'); notify.updateBadge(); });
+addEventListener('pagehide', () => { snd.suspend(); sim.save(); cloud.push('unload'); notify.updateBadge(); });
 
 // ---- main loop ----
 const clock = new THREE.Clock();
