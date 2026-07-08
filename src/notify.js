@@ -8,8 +8,8 @@
 import { store } from './store.js';
 
 export const PUSH = {
-  serverUrl: null,        // e.g. 'https://habitat-push.<you>.workers.dev'
-  vapidPublicKey: null,   // base64url public key from the worker setup
+  serverUrl: 'https://habitat-push.john-d70.workers.dev',
+  vapidPublicKey: 'BGsnOhtgODwsSYkPg1eKSwwCi4LVAVvqCj47iHQEtxtNoZBmwGXUCIdo7KXXso02vqK6to3JdDeBx4NJ_hNdPLA',
 };
 
 export class Notify {

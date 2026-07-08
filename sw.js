@@ -24,7 +24,9 @@ self.addEventListener('fetch', (e) => {
   if (e.request.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
     // game page: freshest wins, cache as fallback + refresh the copy
     e.respondWith(
-      fetch(e.request).then((res) => {
+      // 'no-cache' = revalidate with the server (GitHub Pages sends a 10-min
+      // max-age; without this, updates lag behind the HTTP cache)
+      fetch(e.request, { cache: 'no-cache' }).then((res) => {
         // never cache a bad page (a 404/partial cached mid-deploy = poisoned
         // PWA that stays broken offline)
         if (res.ok && res.type === 'basic') {
