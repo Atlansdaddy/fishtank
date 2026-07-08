@@ -5,6 +5,8 @@
 // the app closed). Tier 2 (push server, see push-server/): true remote pushes
 // on iPhone — wire PUSH below when the worker is deployed.
 
+import { store } from './store.js';
+
 export const PUSH = {
   serverUrl: null,        // e.g. 'https://habitat-push.<you>.workers.dev'
   vapidPublicKey: null,   // base64url public key from the worker setup
@@ -13,7 +15,7 @@ export const PUSH = {
 export class Notify {
   constructor(sim) {
     this.sim = sim;
-    this.enabled = localStorage.getItem('habitat_notif') === 'on';
+    this.enabled = store.get('habitat_notif') === 'on';
   }
   get supported() { return 'Notification' in window && 'serviceWorker' in navigator; }
   get granted() { return this.supported && Notification.permission === 'granted'; }
@@ -23,7 +25,7 @@ export class Notify {
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') return { ok: false, why: 'denied' };
     this.enabled = true;
-    localStorage.setItem('habitat_notif', 'on');
+    store.set('habitat_notif', 'on');
     try {
       const reg = await navigator.serviceWorker.ready;
       // Android/Chrome: periodic background sync — SW checks the tank ~6-hourly
@@ -50,7 +52,7 @@ export class Notify {
 
   disable() {
     this.enabled = false;
-    localStorage.setItem('habitat_notif', 'off');
+    store.set('habitat_notif', 'off');
     navigator.serviceWorker?.ready.then((r) => {
       r.periodicSync?.unregister('care-check').catch(() => {});
       if (PUSH.serverUrl) r.pushManager?.getSubscription().then((s) => {

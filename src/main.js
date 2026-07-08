@@ -4,6 +4,7 @@ import { buildTank } from './tank.js';
 import { buildFish } from './fishbuilder.js';
 import { buildInvert } from './invertbuilder.js';
 import { CareSim } from './sim.js';
+import { store } from './store.js';
 import { Sound } from './audio.js';
 import { Notify } from './notify.js';
 import { FoodSystem } from './food.js';
@@ -305,6 +306,10 @@ if (hadSave) {
 }
 // gentle nudge if there's no recent manual backup
 setTimeout(() => {
+  if (!store.ok) {
+    ui.toast('⚠️ This phone is blocking saves! Turn OFF Settings → Safari → “Block All Cookies”, or your tank will be forgotten.', 8000);
+    return;
+  }
   const lb = sim.state.lastBackup || 0;
   if (Date.now() - lb > 14 * 864e5 && sim.tank.fish.length > 0)
     ui.toast('💾 Tip: tap Care → Backup Tank now and then, so your fish are never lost!', 5200);

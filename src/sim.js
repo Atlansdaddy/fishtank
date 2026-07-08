@@ -1,4 +1,5 @@
 import { SIM, CAPACITY, FOODS, SAVE_KEY } from './constants.js';
+import { store } from './store.js';
 
 // Care model for the ACTIVE tank. Tracks per-fish hunger/health and tank-wide
 // water quality + algae. Time passes while the app is closed (offline decay) so
@@ -222,7 +223,7 @@ export class CareSim {
   save() {
     this.state.lastSeen = Date.now();
     const json = JSON.stringify(this.state);
-    try { localStorage.setItem(SAVE_KEY, json); } catch (e) {}
+    store.set(SAVE_KEY, json);
     if (this._mirrorReady) idbPut(SAVE_KEY, json);   // second copy, fire-and-forget
   }
   unlockMirror() { this._mirrorReady = true; this.save(); }
@@ -241,7 +242,7 @@ export class CareSim {
   }
   load() {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = store.get(SAVE_KEY);
       if (raw) return this._apply(JSON.parse(raw));
     } catch (e) {}
     return false;

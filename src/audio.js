@@ -3,9 +3,11 @@
 // one-shot effects for feeding, tapping a fish, and buying. Mobile browsers
 // require a user gesture before audio: call unlock() from any pointerdown.
 
+import { store } from './store.js';
+
 export class Sound {
   constructor() {
-    this.enabled = localStorage.getItem('fishtank_sound') !== 'off';
+    this.enabled = store.get('fishtank_sound') !== 'off';
     this.ctx = null;
     this.master = null;
   }
@@ -31,7 +33,7 @@ export class Sound {
 
   toggle() {
     this.enabled = !this.enabled;
-    localStorage.setItem('fishtank_sound', this.enabled ? 'on' : 'off');
+    store.set('fishtank_sound', this.enabled ? 'on' : 'off');
     if (this.ctx) this.master.gain.linearRampToValueAtTime(this.enabled ? 1 : 0, this.ctx.currentTime + 0.25);
     return this.enabled;
   }
