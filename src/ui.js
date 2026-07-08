@@ -1,5 +1,19 @@
 import { FOODS } from './constants.js';
 import { evaluateAdd } from './rules.js';
+import { portrait } from './portraits.js';
+
+// What each diet key looks like to a kid: same emoji as the Feed buttons so
+// the card tells them exactly which button to press. 'detritus' isn't a food
+// you drop — it's the scraps the cleanup crew finds on its own.
+const DIET = {
+  flake:    { e: '🍥', n: 'Flakes' },
+  pellet:   { e: '🟤', n: 'Pellets' },
+  algae:    { e: '🟢', n: 'Algae Wafers' },
+  frozen:   { e: '🪱', n: 'Bloodworms' },
+  detritus: { e: '🍂', n: 'Scraps it finds & cleans up' },
+};
+const dietEmojis = (spec) => (spec.diet || []).map((d) => DIET[d]?.e || '').join('');
+const dietWords = (spec) => (spec.diet || []).map((d) => DIET[d] && `${DIET[d].e} ${DIET[d].n}`).filter(Boolean).join(' · ');
 
 // All DOM/overlay UI. Kept deliberately minimal and translucent so it never
 // blocks the view of the tank. Big touch targets for small hands.
@@ -32,8 +46,11 @@ const CSS = `
 .foodbtn:active{transform:scale(.94)}
 .catalog{overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:2px}
 .card{background:rgba(255,255,255,.05);border:1px solid var(--edge);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:4px}
-.card .sw{height:34px;border-radius:8px;margin-bottom:2px}
+.card .sw{height:64px;border-radius:8px;margin-bottom:2px;position:relative;overflow:hidden}
+.card .sw img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.card .sw.sil img{filter:brightness(0);opacity:.88}
 .card .sw.q{display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;opacity:.6;background:rgba(255,255,255,.06)!important}
+.card .sw .qm{position:absolute;right:5px;bottom:2px;font-size:16px;font-weight:800;opacity:.75;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 .bookbar{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13px;font-weight:700}
 .bookbar .track{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.12);overflow:hidden}
 .bookbar .track>i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .4s}
@@ -50,7 +67,11 @@ const CSS = `
 .cardback.show{opacity:1;pointer-events:auto}
 .fishcard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.9);width:min(340px,90vw);background:var(--glass2);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--edge);border-radius:20px;padding:16px;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:20}
 .fishcard.show{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
-.fishcard .hero{height:70px;border-radius:14px;margin-bottom:10px;position:relative;overflow:hidden}
+.fishcard .hero{height:96px;border-radius:14px;margin-bottom:10px;position:relative;overflow:hidden}
+.fishcard .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.synclink{display:flex;gap:6px;margin-top:8px;width:100%}
+.synclink input{flex:1;background:rgba(255,255,255,.08);border:1px solid var(--edge);border-radius:10px;padding:8px;color:var(--txt);font-size:14px;min-width:0}
+.synclink button{background:var(--accent);border:none;color:#05201a;font-weight:800;border-radius:10px;padding:8px 12px}
 .fishcard .nm{font-size:20px;font-weight:800}
 .fishcard .sci{font-style:italic;opacity:.7;font-size:12px;margin-bottom:8px}
 .fishcard .hab{font-size:13px;opacity:.9;margin:8px 0;line-height:1.35}
@@ -195,10 +216,22 @@ export class UI {
     if (this.o.syncEnabled) {
       const sy = el('div', 'msgs');
       sy.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;flex-shrink:0';
-      sy.innerHTML = `<span>☁️ Sync code: <b style="user-select:all;letter-spacing:.5px">${this.o.syncCode()}</b></span>`;
+      const code = el('span', null, `☁️ Sync code: <b style="user-select:all;letter-spacing:.5px">${this.o.syncCode()}</b> 📋`);
+      code.style.cursor = 'pointer';
+      code.onclick = async () => {
+        try { await navigator.clipboard.writeText(this.o.syncCode()); this.toast('📋 Sync code copied!'); }
+        catch (e) { this.toast('Long-press the code to copy it.'); }
+      };
       const lk = el('button', 'chip', '🔗 Link another device');
-      lk.onclick = () => this.o.onLinkDevice && this.o.onLinkDevice();
-      sy.appendChild(lk);
+      const row = el('div', 'synclink'); row.style.display = 'none';
+      const inp = el('input'); inp.placeholder = 'code from other device…';
+      inp.autocapitalize = 'none'; inp.autocomplete = 'off'; inp.spellcheck = false;
+      const go = el('button', null, 'Link');
+      go.onclick = () => { const v = inp.value.trim(); if (v) this.o.onLinkDevice && this.o.onLinkDevice(v); };
+      inp.onkeydown = (e) => { if (e.key === 'Enter') go.onclick(); };
+      row.append(inp, go);
+      lk.onclick = () => { row.style.display = row.style.display === 'none' ? 'flex' : 'none'; if (row.style.display === 'flex') inp.focus(); };
+      sy.append(code, lk, row);
       this.carePanel.appendChild(sy);
     }
     this.carePanel.appendChild(el('div', 'phint', 'Keep water blue and glass clear. Fed, happy fish earn you coins every day!'));
@@ -235,13 +268,13 @@ export class UI {
     for (const s of list) {
       const c = el('div', 'card');
       if (dis.has(s.id)) {
-        const sw = el('div', 'sw');
-        sw.style.background = `linear-gradient(120deg, ${s.colors.base}, ${s.colors.patternColor || s.colors.fin || s.colors.base})`;
-        c.append(sw, el('div', 'cn', s.common), el('div', 'cs', s.scientific));
+        c.append(this._thumb(s), el('div', 'cn', s.common), el('div', 'cs', s.scientific));
         c.style.cursor = 'pointer';
         c.onclick = () => this.showSpeciesFacts(s);
       } else {
-        c.append(el('div', 'sw q', '?'), el('div', 'cn', '???'), el('div', 'cs', 'Not discovered yet'));
+        const sw = this._thumb(s, true);         // real shape, blacked out — who could it be?
+        sw.appendChild(el('span', 'qm', '?'));
+        c.append(sw, el('div', 'cn', '???'), el('div', 'cs', 'Not discovered yet'));
         c.style.opacity = 0.65;
       }
       this.bookGrid.appendChild(c);
@@ -249,6 +282,19 @@ export class UI {
   }
 
   flash(p) { p.style.transform = 'translateY(4px)'; setTimeout(() => p.style.transform = '', 120); }
+
+  // Species picture: color-gradient placeholder that gets replaced by a
+  // snapshot of the real 3D model. sil=true renders it as a black silhouette
+  // (Fish Book mystery entries — you can see the shape, not the colors).
+  _thumb(spec, sil) {
+    const sw = el('div', 'sw' + (sil ? ' sil' : ''));
+    sw.style.background = `linear-gradient(120deg, ${spec.colors.base}22, ${(spec.colors.patternColor || spec.colors.fin || spec.colors.base)}22)`;
+    portrait(spec, (url) => {
+      const img = new Image(); img.src = url; img.alt = spec.common; img.draggable = false;
+      sw.appendChild(img);
+    });
+    return sw;
+  }
 
   buildCatalog() {
     const { allSpecies, sim, speciesMap } = this.o;
@@ -266,17 +312,16 @@ export class UI {
     this.catalog.innerHTML = '';
     for (const s of list) {
       const c = el('div', 'card');
-      const sw = el('div', 'sw'); sw.style.background = `linear-gradient(120deg, ${s.colors.base}, ${s.colors.patternColor || s.colors.fin || s.colors.base})`;
       const tags = [];
       if (s.predator) tags.push('predator');
       if (s.minSchool >= 4) tags.push(`school ${s.minSchool}+`);
       if ((s.tags||[]).includes('soloOnly')) tags.push('solo');
       if ((s.tags||[]).includes('expertDiet')) tags.push('expert');
       if (s.kind === 'invert') tags.push('invert');
-      c.append(sw,
+      c.append(this._thumb(s),
         el('div', 'cn', s.common),
         el('div', 'cs', s.scientific),
-        el('div', 'meta', `<span class="tag">${s.adultSizeCm}cm</span><span class="tag">${s.care}</span>` + tags.map(t => `<span class="tag">${t}</span>`).join('')));
+        el('div', 'meta', `<span class="tag">${dietEmojis(s)}</span><span class="tag">${s.adultSizeCm}cm</span><span class="tag">${s.care}</span>` + tags.map(t => `<span class="tag">${t}</span>`).join('')));
       const buy = el('button', null, `Add • ${s.price}🪙`);
       buy.onclick = () => this._tryBuy(s);
       c.appendChild(buy);
@@ -292,13 +337,13 @@ export class UI {
     // show a mini review card
     this.fishCard.innerHTML = '';
     const x = el('button', 'x', '✕'); x.onclick = () => this.hideFishCard(); this.fishCard.appendChild(x);
-    const hero = el('div', 'hero'); hero.style.background = `linear-gradient(120deg, ${spec.colors.base}, ${spec.colors.patternColor || spec.colors.fin})`;
-    this.fishCard.append(hero, el('div', 'nm', spec.common), el('div', 'sci', spec.scientific));
+    this.fishCard.append(this._hero(spec), el('div', 'nm', spec.common), el('div', 'sci', spec.scientific));
     const msgs = el('div', 'msgs');
     for (const b of res.block) msgs.appendChild(el('div', 'blk', '⛔ ' + b));
     for (const w of res.warn) msgs.appendChild(el('div', 'wrn', '⚠️ ' + w));
     if (!res.block.length && !res.warn.length) msgs.appendChild(el('div', null, '✅ A great fit for this tank!'));
     this.fishCard.appendChild(msgs);
+    this.fishCard.appendChild(el('div', 'stat', `<span>🍽️ Eats: ${dietWords(spec)}</span>`));
     const act = el('div', 'name-in');
     if (res.block.length) {
       const ok = el('button', null, 'Got it'); ok.style.flex = '1'; ok.onclick = () => this.hideFishCard(); act.appendChild(ok);
@@ -317,11 +362,11 @@ export class UI {
     if (this.hint) this.hint.style.opacity = 0;
     this.fishCard.innerHTML = '';
     const x = el('button', 'x', '✕'); x.onclick = () => this.hideFishCard(); this.fishCard.appendChild(x);
-    const hero = el('div', 'hero'); hero.style.background = `linear-gradient(120deg, ${spec.colors.base}, ${spec.colors.patternColor || spec.colors.fin || spec.colors.base})`;
-    this.fishCard.appendChild(hero);
+    this.fishCard.appendChild(this._hero(spec));
     this.fishCard.appendChild(el('div', 'nm', record.name || spec.common));
     this.fishCard.appendChild(el('div', 'sci', `${spec.common} • ${spec.scientific}`));
     this.fishCard.appendChild(el('div', 'hab', '🌍 ' + spec.habitat));
+    this.fishCard.appendChild(el('div', 'hab', '🍽️ Eats: ' + dietWords(spec)));
     const ul = el('ul', 'facts'); for (const fct of spec.facts) ul.appendChild(el('li', null, fct));
     this.fishCard.appendChild(ul);
     const g = record.growth ?? 1;
@@ -335,6 +380,17 @@ export class UI {
     save.onclick = () => { const v = inp.value.trim(); if (v) { this.o.onRename(record.id, v); this.fishCard.querySelector('.nm').textContent = v; this.toast(`Named "${v}" 🐠`); } };
     nin.append(inp, save); this.fishCard.appendChild(nin);
     this.fishCard.classList.add('show'); this.cardBackdrop.classList.add('show');
+  }
+
+  // Card hero: gradient wash behind a snapshot of the real model.
+  _hero(spec) {
+    const hero = el('div', 'hero');
+    hero.style.background = `linear-gradient(120deg, ${spec.colors.base}55, ${(spec.colors.patternColor || spec.colors.fin || spec.colors.base)}55)`;
+    portrait(spec, (url) => {
+      const img = new Image(); img.src = url; img.alt = spec.common; img.draggable = false;
+      hero.appendChild(img);
+    });
+    return hero;
   }
 
   showSpeciesFacts(spec) { this.showFishCard({ name: spec.common, health: 1, hunger: 0, id: null }, spec); }

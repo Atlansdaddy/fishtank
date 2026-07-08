@@ -8,6 +8,7 @@ import { store } from './store.js';
 import { Sound } from './audio.js';
 import { Notify } from './notify.js';
 import { CloudSync } from './cloud.js';
+import { initPortraits } from './portraits.js';
 import { FoodSystem } from './food.js';
 import { Swarm, Agent } from './behavior.js';
 import { UI } from './ui.js';
@@ -32,6 +33,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
+initPortraits(renderer);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -201,8 +203,7 @@ const ui = new UI({
   },
   syncEnabled: cloud.enabled,
   syncCode: () => cloud.code,
-  onLinkDevice: async () => {
-    const code = prompt('Enter the sync code from your other device:');
+  onLinkDevice: async (code) => {
     if (!code) return;
     const r = await cloud.pull(code);
     if (r.ok) {
