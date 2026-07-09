@@ -16,18 +16,28 @@ import { FRESHWATER_SPECIES } from './species/freshwater.js';
 import { SALTWATER_SPECIES } from './species/saltwater.js';
 import { INVERT_SPECIES } from './species/inverts.js';
 import { INVERT_SPECIES_2 } from './species/inverts2.js';
+import { FISH_SPECIES_2 } from './species/fish2.js';
 import { Keeper } from './progress.js';
 
-const ALL = [...FRESHWATER_SPECIES, ...SALTWATER_SPECIES, ...INVERT_SPECIES, ...INVERT_SPECIES_2];
+const ALL = [...FRESHWATER_SPECIES, ...SALTWATER_SPECIES, ...INVERT_SPECIES, ...INVERT_SPECIES_2, ...FISH_SPECIES_2];
 const SPECIES = {}; for (const s of ALL) SPECIES[s.id] = s;
 
-// weekly special drops: themed batches of the expansion inverts, one per real week
+// weekly special drops, one batch per real week: invert and fish themes
+// alternate, and price-sorting pushes the true showpieces into the late
+// "Legends" weeks. Batch 0 must stay Snail Squad (already seen by players).
 const _wk = (name, f) => ({ name, ids: INVERT_SPECIES_2.filter(f).map(s => s.id) });
+const _fw = (name, list) => ({ name, ids: list.map(s => s.id) });
+const _f2f = FISH_SPECIES_2.filter(s => s.water === 'fresh').sort((a, b) => a.price - b.price);
+const _f2s = FISH_SPECIES_2.filter(s => s.water === 'salt').sort((a, b) => a.price - b.price);
 const WEEKLY = [
   _wk('🐌 Snail Squad', s => s.archetype === 'snail'),
+  _fw('🌈 River Rarities', _f2f.slice(0, 6)),
   _wk('🦐 Shrimp Party', s => s.archetype === 'shrimp'),
+  _fw('🐠 Reef Rush', _f2s.slice(0, 6)),
   _wk('🦀 Crab Crew', s => s.archetype === 'crab' || s.archetype === 'crayfish'),
+  _fw('👑 River Legends', _f2f.slice(6)),
   _wk('⭐ Weird & Wonderful', s => ['star', 'urchin', 'anemone', 'featherduster'].includes(s.archetype)),
+  _fw('🌊 Ocean Legends', _f2s.slice(6)),
 ].filter(b => b.ids.length);
 
 const STARTERS = {
