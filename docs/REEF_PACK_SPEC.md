@@ -1,7 +1,8 @@
 # Reef Pack — Content Expansion Spec (saltwater tank)
 
 **Not a habitat.** This is a content pack for the EXISTING saltwater aquarium
-(live at 178 species). It replaces the fake painted-cone "corals" in
+(live at 202 species: 76 fresh + 58 salt + 24 fish2 + 44 inverts, all
+imported in `src/main.js:15-19`). It replaces the fake painted-cone "corals" in
 `buildDecor('salt')` (`src/main.js`) with real, purchasable, placeable,
 growing corals + live rock, and gives several already-shipped saltwater fish
 their signature reef behaviors for free. Branch: `pack/reef`. Ships against
@@ -36,7 +37,7 @@ decor.
 | Moves | swims/crawls | never (sways only) | never |
 | Sim | hunger/health | **growth (weeks) + bleach** off the water meter | — |
 | Tap | follow + fish card | **coral card** (facts, growth %, Move button) | nothing |
-| Can die | yes | DECISION FOR JOHN (§3.4) | no |
+| Can die | yes | stony corals only — tiered by hardiness (§3.4) | no |
 
 Save shape (additive; `state.version` stays 2, mirror `_migrate()`'s
 `f.growth ??= 1` pattern with `t.reef ??= []` for both tanks):
@@ -111,11 +112,11 @@ Live rock is placed the same way (sand only) and registers its mesh as a
 raycast target for subsequent corals — rockwork first, corals on top, exactly
 like the real hobby.
 
-**Sessile inverts join in (small, recommended):** newly bought anemones /
-feather dusters go through the same placement flow instead of spawning at a
-random fixed point (existing ones keep their spot). One code path, and the
-kid decides where the clownfish's home is — which matters for §1.4.
-**DECISION FOR JOHN** — see §8 D4.
+**Sessile inverts join in:** newly bought anemones / feather dusters go
+through the same placement flow instead of spawning at a random fixed point
+(existing ones keep their spot). One code path, and the kid decides where the
+clownfish's home is — which matters for §1.4.
+**DECIDED (John, 2026-07-09)** — see §8 D4.
 
 ### 1.3 Coral growth over real weeks — `f.growth` philosophy, ×4–9 timescale
 
@@ -164,7 +165,7 @@ placed torch/hammer coral (`hosts: true`, real-world surrogate hosting; kids
 who can't afford the Hard-care anemone still get the moment). Bond stored on
 the fish record (`f.hostId`) so it survives reload. A bonded pair shares one
 host (schooling `'pair'` already keeps them together). Bond breaks if the
-host is removed or (DECISION D1) dies.
+host is removed or dies (stony hosts can die per D1, §3.4).
 
 **First-bond moment:** toast `💞 Coraline moved into the anemone!` + a Fish
 Book note on the clownfish card + a one-time surprise-grade camera-worthy
@@ -191,9 +192,9 @@ geometry updates anywhere in the pack.
 | `liverock` | live rock | 2–3 merged noise-displaced dodecahedra; coralline-algae patches vertex-painted pink/purple | ≤ 1.5k | 1 |
 
 The tentacled path deliberately reuses the sway contract rather than
-inventing a shader — the shipping anemone already animates 92 swayed meshes
-per instance, so two torches (~50 meshes) are strictly cheaper than one
-anemone. **Escape hatch if profiling disagrees:** merge tentacles into one
+inventing a shader — the shipping anemone already animates 46 swayed
+tentacles among ~93 total meshes per instance (`src/invertbuilder.js:119-131`),
+so two torches (~50 meshes) are strictly cheaper than one anemone. **Escape hatch if profiling disagrees:** merge tentacles into one
 geometry with a per-vertex phase attribute and do the sway in the vertex
 shader (same visual, 1 draw); the contract makes the two implementations
 interchangeable.
@@ -278,7 +279,8 @@ Stages, all shader-visible (`uBleach`), all before anything dies:
    `notify.event('🪸 Your corals are bleaching!', 'They will recover if you
    clean the water now.')` — same pipeline as death notices.
 3. **0.7–1.0 bone white**: polyps gone, coral stark white. Final warning.
-4. **1.0**: outcome = DECISION D1 below.
+4. **1.0**: outcome tiered by hardiness — softies stay white until rescued,
+   stony corals can die (D1, §3.4).
 
 Recovery is real but SLOW (7 pristine days from full white — color creeps
 back, polyps re-emerge last). Bleached corals don't grow. Teach the true
@@ -293,20 +295,16 @@ Dropping bloodworms near one at night (polyps extended) triggers a polyp
 gulp (sway pulse + tint flash) and a small growth bonus that respects the
 `DAY_CAP`-style once-per-day limit. True husbandry, cheap to build, deferred.
 
-### 3.4 DECISION FOR JOHN — D1: bleaching endgame (can corals die?)
+### 3.4 **DECIDED (John, 2026-07-09)** — D1: bleaching endgame — TIERED BY HARDINESS
 
-- **(a) Corals never die** — at `bleach = 1` they stay bone white until
-  rescued, however long that takes. Zero heartbreak; slightly off-brand
-  (every other neglect in the game has real stakes).
-- **(b) Real death (recommended)** — 4+ days at `bleach = 1` kills it; the
-  white **skeleton stays in the tank** as placed decor (real, poignant, and a
-  standing reminder rather than a vanished toy). Removable for a few coins,
-  or a new frag can be placed on the skeleton (also real). Matches the
-  queen-death / fish-death brand: warnings escalate loudly first.
-- **(c) Tiered** — soft corals (mushrooms, GSP, zoas, xenia, toadstool)
-  always recover; stony corals (everything with a skeleton) can die per (b).
-  Most honest to biology, gives the Easy roster a safety rail for the
-  6-year-old and real stakes to the corals earned later.
+Soft corals (mushrooms, GSP, zoas, xenia, toadstool) always recover, however
+long they sit bone white; stony corals (everything with a skeleton) can die
+after 4+ days at `bleach = 1`, and the white **skeleton stays in the tank**
+as placed decor — removable for a few coins, or a new frag can be placed on
+the skeleton (also real). John chose this over the writer's flat real-death
+recommendation because it matches the real-world hardiness ladder: a safety
+rail on the Easy roster for the 6-year-old, real stakes on the corals earned
+later. Warnings still escalate loudly first, per the queen-death precedent.
 
 ---
 
@@ -595,11 +593,11 @@ No species data changes required — all keyed off tags/archetypes already in
 | mandarin_dragonet, spotted_mandarin (`expertDiet`) | **hunts pods on live rock** — each placed live rock slows their hunger accrual a notch | true husbandry ("mandarins need mature live rock") expressed as `hunger` rate × (1 − 0.1 × min(4, rocks)); makes the Hard fish genuinely easier WITH a reef, teaching the real lesson |
 | banggai_cardinalfish | hovers near a torch/anemone for shelter (real: they shelter in urchins and anemones) | zone steering pull toward nearest tentacled item, no bond |
 
-DECISION FOR JOHN — D5: does tang/blenny grazing actually reduce the `algae`
-meter (small, capped/day) or stay purely visual? (a) visual only — scrubbing
-stays 100% the kid's job and XP source; (b) tiny capped reduction —
-clean-up-crew fantasy is real (recommended: cap at 0.1/day so the wipe
-ritual and its XP survive).
+**DECIDED (John, 2026-07-09) — D5:** tang/blenny grazing gives a tiny capped
+`algae` reduction, 0.1/day cap (writer's rec) — the clean-up-crew fantasy is
+real, but scrubbing stays the kid's job and XP source. This is the CANONICAL
+grazing mechanic: `TIDEPOOL_SPEC.md` (to-be-built) is being aligned to
+describe grazing the same way — capped, not a chore replacement.
 
 ---
 
@@ -636,7 +634,9 @@ Three ways to ship 14 items into the earned catalog:
   and `unlocked()`/`weeklyNews()` iterating both tracks. Existing weekly
   code untouched.
 
-**DECISION FOR JOHN — D2:** (a) vs (b) vs (c) above. Recommendation: (c).
+**DECIDED (John, 2026-07-09) — D2:** (c), the level-6-gated reef weekly
+track with its own `reefT0` clock (writer's rec) — every kid, veteran or new,
+gets the same five-week reef arc.
 
 Adjacent hooks, all existing plumbing: placing a new reef species fires the
 normal `discover` XP + Fish Book flow (it's just a species id in
@@ -680,7 +680,8 @@ Per `HABITAT_VISION.md`, all four, made concrete:
    - **Frag drop** — a grown branching/mat coral sheds a frag onto the sand
      (glowing like the treasure chest). Tap: keep it (free baby coral →
      placement mode) or, if reef space is full, sell it (coins — "the frag
-     swap", straight from real hobby culture). DECISION D3 below.
+     swap", straight from real hobby culture). Keep-if-space-else-coins,
+     no dialog — D3, §8.
    - **Xenia / GSP spread** — a new small patch appears overnight on an
      adjacent rock ("Your star polyps spread to the next rock!"). Real,
      slightly mischievous, and it makes the reef feel alive while you sleep.
@@ -728,26 +729,22 @@ the first coral renders).
 
 ---
 
-## 8. DECISIONS FOR JOHN (recap)
+## 8. DECISIONS (recap) — all **DECIDED (John, 2026-07-09)**
 
-- **D1 — Bleaching endgame** (§3.4): (a) corals never die, stay white until
-  rescued; (b) real death after 4+ days fully bleached, skeleton remains in
-  the tank (recommended — matches the care-with-stakes brand and the
-  queen-death precedent); (c) tiered — softies always recover, stony corals
-  can die (most biologically honest, gentlest on-ramp).
-- **D2 — Progression shape** (§5): (a) append to existing WEEKLY pool
-  (veterans get everything at once); (b) fold into keeper-level deliveries
-  (no arrival moment); (c) level-6-gated reef track with its own weekly
-  clock (recommended — every kid gets the same five-week reef arc).
-- **D3 — Frag economy** (§6): (a) frags are always free baby corals; (b)
-  frags always sell for coins; (c) keep-or-sell based on reef space, kid
-  taps to choose (recommended: keep if space, auto-offer coins if full — no
-  dialog, stays calm).
-- **D4 — Sessile invert placement** (§1.2): (a) anemones/feather dusters
-  keep spawning at random fixed spots; (b) newly bought sessiles go through
-  the new placement mode (recommended — one code path, and the kid chooses
-  the clownfish's home).
-- **D5 — Grazing gameplay effect** (§4.2): tang/blenny rock-grazing is (a)
-  purely visual, or (b) reduces the algae meter a tiny capped amount per day
-  (recommended: (b) with a 0.1/day cap so scrubbing remains the kid's job
-  and XP source).
+- **D1 — Bleaching endgame** (§3.4): **TIERED BY HARDINESS** — soft corals
+  always recover; stony corals can die and leave their white skeleton in the
+  tank. John chose this over the writer's flat real-death rec: it matches the
+  real-world hardiness ladder (Easy-roster safety rail, real stakes later).
+- **D2 — Progression shape** (§5): **level-6-gated reef weekly track with its
+  own `reefT0` clock** (writer's rec) — every kid gets the same five-week
+  reef arc, veteran or brand-new.
+- **D3 — Frag economy** (§6): **keep-if-space-else-coins, no dialog**
+  (writer's rec) — a free baby coral when there's room, an auto coin offer
+  when the reef is full; stays calm.
+- **D4 — Sessile invert placement** (§1.2): **new sessiles use the placement
+  mode; existing anemones keep their random spawn spot** (writer's rec) —
+  one code path, and the kid chooses the clownfish's home.
+- **D5 — Grazing gameplay effect** (§4.2): **tiny capped algae reduction,
+  0.1/day cap** (writer's rec) — clean-up crew is real but scrubbing stays
+  the kid's job and XP source. CANONICAL grazing mechanic; `TIDEPOOL_SPEC.md`
+  (to-be-built) is being aligned to describe grazing the same capped way.

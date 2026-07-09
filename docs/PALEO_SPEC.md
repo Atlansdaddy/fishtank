@@ -2,7 +2,7 @@
 
 The roadmap finale (#10) and the ultimate "pet you can't have": animals that
 are gone. Per `ROADMAP.md` it is deliberately last because it reuses **every**
-locomotion family built before it — swim (aquarium), crawler/climber
+locomotion family built before it — swim (aquarium), crawl/climb
 (aquarium + terrarium), serpent (terrarium), hop (terrarium), flutter
 (butterfly garden), flight (aviary). New locomotion code target: **zero**.
 That constraint is the whole point of building it last, and this spec is
@@ -36,14 +36,12 @@ Three honest options, costed against `tank.js`/`main.js` reuse:
 | **(b) Open Paddock diorama** | New enclosure metaphor: a bounded open-air diorama (no front pane), camera stays the existing orbit controller. Matches the "Paddock" name; can hold bigger animals framed by terrain, not glass. | Partial — keeps camera, lights, day/night, substrate; **loses** the glass frame, front-pane grime meter, and the "wipe the glass" gesture (which the whole care/retention loop leans on). | New environment builder (horizon, skybox, terrain silhouette), new "clean" metaphor to replace glass-wipe, camera re-clamp. | High — big animals fit visually. | Breaks the glass-box consistency that unifies habitats 1–9. |
 | **(c) Per-era sub-enclosures** | Three distinct enclosures — Paleozoic aquarium / Mesozoic paddock / Ice-Age vivarium — each its own environment builder, switched like tanks. | Partial ×3 — aquarium wing reuses `tank.js` fully; paddock + ice-age wings are each an (b)-style new builder. | 2–3× the environment work of (a); most content of any option. | Highest — every era gets a bespoke stage. | Mixed — best fantasy, most build, latest ship.
 
-> **DECISION FOR JOHN — the enclosure metaphor.** Pick one:
-> **(a)** glass-box Lab Vivarium, small animals only;
-> **(b)** open Paddock diorama, new enclosure;
-> **(c)** three per-era sub-enclosures.
->
-> **My recommendation: (a) as the shipping shape, architected so it grows
-> toward (c) for free — and (b) parked as a post-launch "Big Animals"
-> expansion.** Reasoning:
+> **DECIDED (John, 2026-07-09): (a) — the glass-box Lab Vivarium with the era
+> switch (Paleozoic/Mesozoic/Recent), small animals only.** The open Paddock
+> diorama (b) is parked as a later "Big Animals" expansion; per-era
+> sub-enclosures (c) fall out for nearly free from the era-theme switch.
+> Rationale: reuse is the mandate and (a) reuses `tank.js` at ~100% while
+> keeping the glass-wipe care loop. Reasoning in full:
 >
 > 1. **Reuse is the mandate.** Paleo's roadmap justification is "pure reuse —
 >    no new tech." Option (a) reuses `tank.js` at ~100% and, critically,
@@ -51,22 +49,26 @@ Three honest options, costed against `tank.js`/`main.js` reuse:
 >    `setTheme`) to become an **era switch** at zero new enclosure code. That
 >    same switch already ships and is regression-tested.
 > 2. **We get most of (c) for nearly free.** Define the pack's `subtypes` as
->    **eras** (`paleozoic`, `mesozoic`, `recent`) instead of water types. Each
->    era is the *same glass box* re-themed — Paleozoic reads as a lit reef
->    aquarium (water surface on), Mesozoic/Carboniferous as humid swamp air
->    (surface off, warm fog), Recent as a bright vivarium. That is the
->    multi-era fantasy of (c) delivered as three theme entries, not three
->    builders.
+>    **eras** (`paleozoic`, `carboniferous`, `mesozoic`, `recent`) instead of
+>    water types. Each is the *same glass box* re-themed — Paleozoic reads as a
+>    lit reef aquarium (water surface **on**), the Carboniferous swamp and the
+>    Mesozoic as humid swamp **air** (surface off, warm fog), Recent as a bright
+>    vivarium. The three era *wings* are Paleozoic/Mesozoic/Recent, but the
+>    Paleozoic wing carries **two biome looks** — a wet Cambrian sea and a dry
+>    Carboniferous swamp — because you cannot flood a flying insect (both are
+>    geologically Paleozoic; see §2 and the Meganeura carve-out). That is the
+>    multi-era fantasy of (c) delivered as theme entries, not new builders.
 > 3. **The care/retention loop survives.** The glass-wipe gesture
 >    (`scrubAlgae`) is load-bearing across every habitat and is the natural
 >    home for the fossil-dig hook (§6). Option (b) throws it away.
 > 4. **Honest ceiling.** (a) genuinely cannot hold a 6-metre plesiosaur or an
->    adult theropod. That is a real cost — but the roadmap's own star list
->    ("plesiosaur (swim), dodo (ground), small pterosaur (flight)") can be met
->    with small/juvenile forms, and "the lab only revives what fits the tank"
->    is a defensible, honest framing for a 6-year-old. Big animals become the
->    reason to build (b) later, as its own project — exactly how the Pet Shop
->    UI was deferred.
+>    adult theropod. That is a real cost — the true giants (plesiosaur,
+>    Dunkleosteus) are **held for the (b) Big-Animals paddock**, not
+>    juvenile-shrunk into the glass box. The small stars that *do* fit (dodo,
+>    small pterosaur, feathered theropods) carry the wings, and "the lab only
+>    revives what fits the tank" is a defensible, honest framing for a
+>    6-year-old. Big animals become the reason to build (b) later, as its own
+>    project — exactly how the Pet Shop UI was deferred.
 >
 > This keeps new code near zero for the finale while leaving the door open.
 
@@ -87,7 +89,7 @@ without touching the frame loop. Eras are the `setTheme` argument, exactly as
 | Glass frame (`addFrame`) | **Identical** | Same `TANK` dims (122×61×61). A lab vivarium is a glass box; keep `TANK`/`BOUNDS` constants unchanged. |
 | Sand bed (`PlaneGeometry` + dune noise) | Era substrate | Same displaced plane. Paleozoic → rippled seabed + shell hash; Mesozoic → mud + fern litter sprites; Recent → island soil. Theme colors swap `sand`/`sandDark` per era. |
 | Back wall (`BackSide` box) | Era backdrop | Same dark box. Paleozoic → deep-reef blue; Mesozoic → misty fern silhouette (painted texture); Recent → dawn sky. One texture swap in `setTheme`. |
-| Water surface plane | **Era-gated** | **On** for `paleozoic` (it is literally an ancient-sea aquarium — the entire aquarium water stack reuses verbatim). **Off** for `mesozoic`/`recent` (dry air), replaced by a shallow water dish (terrarium's trick: cylinder + `surfMat` ripple disc). One boolean in the theme. |
+| Water surface plane | **Era-gated** | **On** for `paleozoic` (it is literally an ancient-sea aquarium — the entire aquarium water stack reuses verbatim). **Off** for `carboniferous`/`mesozoic`/`recent` (dry air), replaced by a shallow water dish (terrarium's trick: cylinder + `surfMat` ripple disc). One boolean (`wet`) in the theme — this is the flag that lets Meganeura fly in air instead of drowning in the Cambrian sea. |
 | Caustics shader | Era-gated | On under water (paleozoic). For dry eras, reuse the quad slot as the terrarium's warm basking disc for baskers. |
 | `buildShafts()` sun shafts | Keep, retint | Blue-green under water; warm dusty gold in Carboniferous/Mesozoic air (`vec3(1.0,0.9,0.72)`). |
 | `buildBubbles()` airstone | Era-gated | On (paleozoic sea). Off in dry eras (idle count 0), reused as terrarium-style mist burst on a `mist()` call if a dry era needs humidity events. |
@@ -98,7 +100,7 @@ Theme entries (the `WATER_THEMES` sibling — becomes per-pack `themes` after th
 engine split). Three eras, one shape each:
 
 ```js
-paleozoic: {                                  // ancient sea + carboniferous swamp
+paleozoic: {                                  // Cambrian ancient SEA — underwater
   wet: true,                                  // water surface + caustics + bubbles ON
   fogColor: 0x0e3a44, fogDensity: 0.0038,
   deep: 0x08222a, tint: 0x1e6e7e,
@@ -106,6 +108,15 @@ paleozoic: {                                  // ancient sea + carboniferous swa
   ambient: 0x2e4a4a,
   sand: 0x6e6450, sandDark: 0x4a4234,         // muddy seabed / shell hash
   surface: 0x8fd0c4,
+},
+carboniferous: {                              // Carboniferous swamp — DRY AIR (Meganeura flies here)
+  wet: false,                                 // surface + caustics + bubbles OFF — it is air, not sea
+  fogColor: 0x243a24, fogDensity: 0.0018,     // warm, oxygen-rich swamp haze
+  deep: 0x142010, tint: 0x486a34,
+  lightColor: 0xf4e2a0, lightIntensity: 1500,
+  ambient: 0x384428,
+  sand: 0x40381f, sandDark: 0x282213,         // peat + fern-litter floor
+  bask: 0xffb060,
 },
 mesozoic: {                                   // age of dinosaurs — humid air
   wet: false,
@@ -128,7 +139,8 @@ recent: {                                     // the just-gone (dodo era) — br
 ```
 
 Era switch = the existing subtype button generalized (aquarium's fresh/salt
-toggle → a three-era selector), driving `setTheme(era)` and `CareSim.switchTank(era)`.
+toggle → a multi-era selector: Paleozoic marine, Carboniferous swamp, Mesozoic,
+Recent), driving `setTheme(era)` and `CareSim.switchTank(era)`.
 
 ---
 
@@ -205,48 +217,48 @@ gets a near-zero approximation so the "no new tech" promise holds.
 
 | Species | Era | Reused mode (source habitat) | How it reuses |
 |---|---|---|---|
-| Trilobite | Paleozoic | **crawler** (aquarium/terrarium) | `Agent.crawler` verbatim — floor + wall SURFACES, `_animateCrawler`. A trilobite *is* a benthic invert; add a "roll into a ball" startle pose (scale-squash, reuse `scuttle`). |
+| Trilobite | Paleozoic | **crawl** (aquarium/terrarium) | `crawl` module verbatim — floor + wall SURFACES, `_animateCrawler`. A trilobite *is* a benthic invert; add a "roll into a ball" startle pose (scale-squash, reuse `scuttle`). |
 | Ammonite | Paleozoic/Mesozoic | **swim** (aquarium) | Slow neutral-buoyancy drift; `speed` low; roll pinned so the shell stays up. Jet-burst = reuse the `startle` velocity kick. |
 | Anomalocaris | Paleozoic | **swim** (aquarium) + eel wave | Swim steering for the body; the lateral swimming flaps ripple via the **eel travelling-wave** shader (`fishbuilder` `aT` wave) already used for kuhli loach / snakes. Predator flag on. |
 | Dunkleosteus | Paleozoic | **swim** (aquarium, predator) | `shark`/predator swim path verbatim — hunt/lunge/`_devour`. Armored head is a builder detail, not new motion. **Size caveat, see below.** |
-| Meganeura | Paleozoic (Carbon.) | **flutter** (butterfly garden) | Flutter-flight boid = butterfly's gentle flight, scaled up. If Paleo ships before Butterfly, this is the one dependency to sequence (or fall back to hovering-swim). |
-| Microraptor | Mesozoic | **flight** (aviary) + **climber** (terrarium) | Glide/flap = aviary flight boids; perching on branches = terrarium branch-perch + climber glue. Four-winged glide is a pose, not new physics. |
-| Archaeopteryx | Mesozoic | **flutter** + **climber** hybrid | Weak flier: flutter for short hops between branches, climber glue for perching/trunk-clinging. Exactly the terrarium "arboreal climber" + butterfly "flutter" combined — both exist. |
-| Dodo | Recent | **crawler** (floor-only) + waddle | Ground crawler pinned to `floor` SURFACE; a bird **waddle** is a cosmetic bob/side-sway in the builder's animate function, not a new locomotion module. |
-| Psittacosaurus | Mesozoic | **crawler** | Quadruped/occasional-biped walk approximated by floor crawler + upright root pose. |
+| Meganeura | Carboniferous (Paleozoic wing, **dry** sub-theme) | **flutter** (butterfly garden) | Flutter-flight boid = butterfly's gentle flight, scaled up. Lives in the `carboniferous` dry theme (`wet:false`), so it flies in swamp air — never in the flooded Cambrian sea. If Paleo ships before Butterfly, this is the one dependency to sequence (or fall back to a hovering flutter). |
+| Microraptor | Mesozoic | **flight** (aviary) + **climb** (terrarium) | Glide/flap = aviary flight boids; perching on branches = terrarium branch-perch + climb glue. Four-winged glide is a pose, not new physics. |
+| Archaeopteryx | Mesozoic | **flutter** + **climb** hybrid | Weak flier: flutter for short hops between branches, climb glue for perching/trunk-clinging. Exactly the terrarium "arboreal climb" + butterfly "flutter" combined — both exist. |
+| Dodo | Recent | **crawl** (floor-only) + waddle | Ground crawl pinned to `floor` SURFACE; a bird **waddle** is a cosmetic bob/side-sway in the builder's animate function, not a new locomotion module. |
+| Psittacosaurus | Mesozoic | **crawl** | Quadruped/occasional-bipedal walk approximated by floor crawl + upright root pose. |
 | Plesiosaur | Mesozoic | **swim** (aquarium) | Four-flipper "underwater flight" = swim steering + flipper sway (invert-kit `sway`). **Size caveat, see below.** |
-| Compsognathus | Mesozoic | **biped** (⚠ possibly new) | Small running theropod — the one gait with no exact prior. See flag. |
-| Sinosauropteryx | Mesozoic | **biped** (⚠ possibly new) | Same — small feathered runner. See flag. |
+| Compsognathus | Mesozoic | **crawl** (biped approximated, §4a) | Small running theropod — the bipedal look is a builder pose over a `crawl` agent. See flag. |
+| Sinosauropteryx | Mesozoic | **crawl** (biped approximated, §4a) | Same — small feathered runner; `crawl` sim + upright builder pose. See flag. |
 
 > **⚠ The one thing that could need new locomotion: a bipedal gait.** Small
 > theropods (Compsognathus, Sinosauropteryx) run on two legs — no prior habitat
 > built a biped walk cycle. Two ways to keep new code near zero:
 >
-> 1. **Approximate (recommended, ~0 new sim code):** treat them as **floor
->    crawlers** (reuse `_animateCrawler` steering/targeting/startle wholesale)
->    and put the *bipedal look* entirely in the **builder's animate function** —
->    an upright root, alternating leg bob, counter-swinging tail, head bob.
->    Motion planning is identical to a crawler; only the visual pose differs.
->    This is exactly how the terrarium made a snake out of an eel: same steering,
->    different body animation.
-> 2. **Build it (defer):** a real `biped` locomotion module (footfall planting,
->    stride-locked speed) — genuinely new ~120-line code like terrarium's hop.
->    Only worth it if theropods are the marquee draw.
+> 1. **Approximate (chosen, ~0 new sim code):** run them on the **`crawl`**
+>    locomotion module (reuse `_animateCrawler` steering/targeting/startle
+>    wholesale) and put the *bipedal look* entirely in the **builder's animate
+>    function** — an upright root, alternating leg bob, counter-swinging tail,
+>    head bob. Motion planning is identical to any `crawl` agent; only the visual
+>    pose differs. This is exactly how the terrarium made a snake out of an eel:
+>    same steering, different body animation.
+> 2. **Build it (deferred):** a real dedicated biped locomotion module (footfall
+>    planting, stride-locked speed) — genuinely new ~120-line code like
+>    terrarium's hop, and a name outside the canonical registry. Only worth it
+>    if theropods graduate to the marquee draw.
 >
-> **DECISION FOR JOHN — theropod gait:** (a) approximate as crawler + upright
-> builder pose (keeps the zero-new-code promise); (b) build a real biped module
-> (nicer running, breaks the "no new tech" framing); (c) **cut theropods from
-> Paleo entirely** and lean the roster on swimmers/fliers/crawlers that reuse
-> 100%. My recommendation: **(a)** — it lands Sinosauropteryx (a melanosome
-> color star, §5) with zero new movement code.
+> **DECIDED (John, 2026-07-09): (a) — approximate the theropod gait on the
+> `crawl` module + an upright builder pose.** Keeps the zero-new-code promise
+> and lands Sinosauropteryx (a melanosome color star, §5) with no new movement
+> code; the bipedal read lives entirely in the builder's animate function while
+> the sim runs the existing `crawl` agent.
 
-> **Size caveat (Dunkleosteus, Plesiosaur).** Both were huge (6 m+). Under
-> option (a)'s "nothing bigger than the 120g world" rule they ship as **small
-> juveniles or scaled models** framed as lab specimens — or wait for a future
-> (b) Big-Animals paddock. The `adultSizeCm` fields below are set to
-> tank-legal juvenile sizes; the card states the true adult size as a fact
-> ("grew as long as a school bus"). **DECISION FOR JOHN:** juvenile-scale the
-> giants into the glass box, or hold them for a paddock expansion.
+> **Size caveat (Dunkleosteus, Plesiosaur).** Both were huge (6 m+), past
+> option (a)'s "nothing bigger than the 120g world" rule.
+> **DECIDED (John, 2026-07-09): hold the giants for the future paddock /
+> "Big Animals" expansion — do NOT juvenile-scale them into the glass box.**
+> Paleo's glass wing ships without them; their true size ("grew as long as a
+> school bus") becomes a headline reason to build the open-paddock (b) enclosure
+> later, where they can be shown at real scale.
 
 Day/night reuses `Swarm.nightFactor` unchanged — nocturnal tags drive activity
 math already in `behavior.js`.
@@ -266,14 +278,16 @@ dinosaur colors), and honestly flagged as unknown where they aren't.
 
 ### Schema deltas (consistent, minimal — mirrors the terrarium deltas)
 
-- `water:` the **era wing** id — `'paleozoic' | 'mesozoic' | 'recent'` (the
-  CareSim subtype, i.e. the "tank").
+- `water:` the **era subtype** id — `'paleozoic' | 'carboniferous' | 'mesozoic' |
+  'recent'` (the CareSim subtype, i.e. the "tank"; `paleozoic` and
+  `carboniferous` are the two biome looks of the Paleozoic wing).
 - `era:` display string for the card (e.g. `'Cambrian seas, ~500 mya'`).
 - `kind:` selects the builder — `'invert'` (invert-kit: trilobite, ammonite,
   anomalocaris), `'bug'` (flutter insect: Meganeura), `'fish'` (fishbuilder:
   Dunkleosteus), `'paleo'` (one new small builder for feathered/beaked forms:
   dodo, Archaeopteryx, theropods).
-- `locomotion:` `'crawler' | 'swim' | 'flutter' | 'flight' | 'climber' | 'biped'`.
+- `locomotion:` canonical registry value — `'crawl' | 'swim' | 'flutter' |
+  'flight' | 'climb'` (theropods use `'crawl'` with a bipedal builder pose, §4a).
 - `humidity:` 0–1 comfort center (semantics per wet/dry era, as terrarium).
 - `colorConfidence:` `'known' | 'inferred' | 'unknown'` — drives the card's
   color line ("real color from fossils" vs "we don't know — best guess").
@@ -287,7 +301,7 @@ export const PALEO_SPECIES = [
     water: 'paleozoic', era: 'Cambrian seas, ~500 million years ago',
     kind: 'invert', adultSizeCm: 4, bioload: 1, minSchool: 4,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'bottom', locomotion: 'crawler', humidity: 1.0,
+    tags: [], zone: 'bottom', locomotion: 'crawl', humidity: 1.0,
     speed: 0.4, schooling: 'loose', diet: ['detritus'], price: 20,
     archetype: 'trilobite', size: 0.9, edible: true,
     colorConfidence: 'unknown', careConfidence: 'inferred',
@@ -318,7 +332,7 @@ export const PALEO_SPECIES = [
       'It squirted water to jet backwards through the sea, steering with little tentacles.',
       'We can hold thousands of their fossil shells, but nobody knows what color they were alive — a mystery the fossils just can\'t tell us.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'anomalocaris', common: 'Anomalocaris', scientific: 'Anomalocaris canadensis',
@@ -326,7 +340,7 @@ export const PALEO_SPECIES = [
     kind: 'invert', adultSizeCm: 18, bioload: 8, minSchool: 1,
     temperament: 'aggressive', predator: true, finNipper: false, longFins: false,
     tags: ['soloOnly'], zone: 'mid', locomotion: 'swim', humidity: 1.0,
-    speed: 0.8, schooling: 'none', diet: ['livePrey'], price: 90,
+    speed: 0.8, schooling: 'solo', diet: ['livePrey'], price: 90,
     archetype: 'anomalocaris', size: 1.3, edible: false,
     colorConfidence: 'unknown', careConfidence: 'inferred',
     colors: { base: '#b5555a', belly: '#d98a86', fin: '#7a2f38',
@@ -341,11 +355,11 @@ export const PALEO_SPECIES = [
   },
   {
     id: 'meganeura', common: 'Giant Dragonfly', scientific: 'Meganeura monyi',
-    water: 'paleozoic', era: 'Carboniferous swamps, ~300 million years ago',
+    water: 'carboniferous', era: 'Carboniferous swamps, ~300 million years ago',
     kind: 'bug', adultSizeCm: 12, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
     tags: [], zone: 'top', locomotion: 'flutter', humidity: 0.7,
-    speed: 1.1, schooling: 'none', diet: ['insects'], price: 60,
+    speed: 1.1, schooling: 'solo', diet: ['insects'], price: 60,
     archetype: 'dragonfly', size: 1.4, edible: true,
     colorConfidence: 'unknown', careConfidence: 'guess',
     colors: { base: '#3a5a44', belly: '#5a7a58', fin: '#a8c0b0',
@@ -356,15 +370,15 @@ export const PALEO_SPECIES = [
       'Scientists think the ancient air held far more oxygen, and that let insects grow to giant sizes.',
       'It hunted other bugs on the wing over the swamps, hundreds of millions of years before the first bird flew.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'sinosauropteryx', common: 'Sinosauropteryx', scientific: 'Sinosauropteryx prima',
     water: 'mesozoic', era: 'Early Cretaceous, ~125 million years ago',
     kind: 'paleo', adultSizeCm: 40, bioload: 4, minSchool: 1,
     temperament: 'semi', predator: true, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'biped', humidity: 0.5,
-    speed: 1.0, schooling: 'none', diet: ['insects', 'livePrey'], price: 85,
+    tags: [], zone: 'ground', locomotion: 'crawl', humidity: 0.5,     // biped look via builder pose (§4a)
+    speed: 1.0, schooling: 'solo', diet: ['insects', 'livePrey'], price: 85,
     archetype: 'theropod', size: 1.0, edible: false,
     colorConfidence: 'known', careConfidence: 'inferred',
     colors: { base: '#b5651d', belly: '#efe2c4', fin: '#9a531a',
@@ -375,7 +389,7 @@ export const PALEO_SPECIES = [
       'From tiny colour-sacs preserved in its fossils, scientists learned it was really ginger-orange with a striped tail — a real dinosaur colour!',
       'It wore a dark "bandit mask" of feathers across its eyes, a little like a raccoon.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'microraptor', common: 'Microraptor', scientific: 'Microraptor gui',
@@ -383,7 +397,7 @@ export const PALEO_SPECIES = [
     kind: 'paleo', adultSizeCm: 42, bioload: 3, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
     tags: [], zone: 'arboreal', locomotion: 'flight', humidity: 0.6,
-    speed: 0.9, schooling: 'none', diet: ['insects', 'livePrey'], price: 95,
+    speed: 0.9, schooling: 'solo', diet: ['insects', 'livePrey'], price: 95,
     archetype: 'raptor', size: 0.85, edible: false,
     colorConfidence: 'known', careConfidence: 'inferred',
     colors: { base: '#1b1b24', belly: '#2a2a34', fin: '#0e0e16',
@@ -402,7 +416,7 @@ export const PALEO_SPECIES = [
     kind: 'paleo', adultSizeCm: 45, bioload: 3, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
     tags: [], zone: 'arboreal', locomotion: 'flutter', humidity: 0.55,
-    speed: 0.7, schooling: 'none', diet: ['insects'], price: 100,
+    speed: 0.7, schooling: 'solo', diet: ['insects'], price: 100,
     archetype: 'archaeopteryx', size: 0.95, edible: false,
     colorConfidence: 'inferred', careConfidence: 'inferred',
     colors: { base: '#3a352e', belly: '#8a7f66', fin: '#1e1a14',
@@ -420,7 +434,7 @@ export const PALEO_SPECIES = [
     water: 'recent', era: 'Died out ~1680, less than 350 years ago',
     kind: 'paleo', adultSizeCm: 70, bioload: 8, minSchool: 2,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'crawler', humidity: 0.5,
+    tags: [], zone: 'ground', locomotion: 'crawl', humidity: 0.5,
     speed: 0.4, schooling: 'loose', diet: ['fruit', 'ferns'], price: 120,
     archetype: 'dodo', size: 1.3, edible: false,
     colorConfidence: 'inferred', careConfidence: 'inferred',
@@ -432,7 +446,7 @@ export const PALEO_SPECIES = [
       'It could not fly and ate fallen fruit; it may even have helped a special tree, the tambalacoque, by eating its big seeds.',
       'The last dodo died over 300 years ago, and every picture we have was drawn from memory or a few bones — so even its exact colour is partly a guess.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
 ];
 ```
@@ -441,9 +455,9 @@ export const PALEO_SPECIES = [
 
 | Wing | Also planned | Reused mode |
 |---|---|---|
-| **Paleozoic** | Opabinia, Hallucigenia, Wiwaxia (crawler); Orthoceras, Eurypterid/sea-scorpion (swim/crawler); **Dunkleosteus** (swim, juvenile-scaled); Helicoprion (swim) | crawler, swim |
-| **Mesozoic** | **Compsognathus** (biped/crawler); Psittacosaurus (crawler, *real countershaded color* — another melanosome star); small pterosaur / juvenile (flight); **Plesiosaur** (swim, scaled); Confuciusornis (flutter) | crawler, biped, swim, flutter, flight |
-| **Recent** | Great Auk, Passenger Pigeon, Carolina Parakeet (flutter/flight); Moa chick (crawler); Thylacine (crawler — *filmed, so gait is known!*) | crawler, flutter, flight |
+| **Paleozoic** | Opabinia, Hallucigenia, Wiwaxia (crawl); Orthoceras, Eurypterid/sea-scorpion (swim/crawl); Helicoprion (swim). *Dunkleosteus held for the Big-Animals paddock — too big.* | crawl, swim |
+| **Mesozoic** | **Compsognathus** (crawl, biped pose §4a); Psittacosaurus (crawl, *real countershaded color* — another melanosome star); small pterosaur / juvenile (flight); Confuciusornis (flutter). *Plesiosaur held for the Big-Animals paddock — too big.* | crawl, swim, flutter, flight |
+| **Recent** | Great Auk, Passenger Pigeon, Carolina Parakeet (flutter/flight); Moa chick (crawl); Thylacine (crawl — *filmed, so gait is known!*) | crawl, flutter, flight |
 
 Note the two extra melanosome/pigment stars available: **Psittacosaurus**
 (known reddish-brown countershading, Vinther 2016) and **Borealopelta** if a
@@ -456,8 +470,10 @@ future big-animal wing opens. Those go where real color is a headline.
 All four `HABITAT_VISION` mechanics, made concrete for Paleo:
 
 1. **Care debt (offline decay).** `CareSim.applyOffline()` loops era wings
-   exactly as it loops `['fresh','salt']`. Neglect drops **Vitality** — but see
-   the death-stakes decision below; Paleo softens the failure state.
+   exactly as it loops `['fresh','salt']`. Neglect drops **Vitality**; at severe
+   neglect the animal **fades back into a fossil** (fossil-fade, decided below)
+   and must be re-excavated via the dig-brush sequence — a real consequence with
+   no permanent loss.
 2. **Growth & babies.** Juvenile → adult via the existing `f.growth` path. A
    revived Archaeopteryx or dodo grows up in your care; the growth reveal card
    fires as today. Breeding is muted for most (they're precious/unique), but
@@ -477,7 +493,9 @@ All four `HABITAT_VISION` mechanics, made concrete for Paleo:
 Instead of tapping "buy" in a coin shop, **you excavate new species from rock.**
 This reuses the wipe/scrub gesture (`scrubAlgae` / `pointermove` brushing) as
 **brushing away rock** — the same muscle memory as cleaning the glass, repointed
-at a fossil block.
+at a fossil block. The same dig-brush sequence is *also* the fossil-fade recovery
+path (a neglected animal that has faded back into rock is re-excavated here), so
+per John's call it is a **first-class specced system**, not an optional flourish.
 
 **Flow:** each era wing has a **dig site** (a rock face beside the tank). Tap it
 to reveal a buried fossil block (a silhouette hidden under a `CanvasTexture` of
@@ -501,35 +519,24 @@ block every few hours / offline), so digging is the daily draw.
   "what will I dig up?" surprise is a strong retention beat that no coin shop
   gives. **Recommended as the acquisition model for Paleo specifically.**
 
-> **DECISION FOR JOHN — acquisition model:** (a) **fossil-dig replaces the
-> coin shop** in Paleo (excavate species by brushing rock; coins become a minor
-> permit sink or vanish); (b) **keep the coin shop** ("revive lab," buy species
-> with coins like every other habitat — least new code); (c) **both** — dig to
-> *discover/unlock* a species (adds the card), then spend coins to *revive* it
-> (keeps the coin economy and the dig delight). My recommendation: **(c)** —
-> discovery-by-dig is the magic, coin-to-revive keeps the earn loop and the
+> **DECIDED (John, 2026-07-09): (c) — fossil-dig to discover/unlock + coins to
+> revive.** You brush rock to *discover/unlock* a species (adds its card to the
+> timeline), then spend coins to *revive* it into the matching era wing.
+> Discovery-by-dig is the magic; coin-to-revive keeps the earn loop and the
 > `rules.js` cost gate intact.
 
-> **DECISION FOR JOHN — death & predation stakes with a 6-year-old.** These
-> animals are already extinct; the kid *resurrected* them. Letting a revived
-> dodo die of neglect carries a heavier emotional load than a fish dying, and
-> the "you brought it back and then it died again" story deserves a deliberate
-> call. Options:
-> (a) **No death.** Neglect only dims a **Vitality** glow / makes the animal
->     sluggish and sad; it never dies. "You can't lose them twice." Calmest,
->     best fit for the Paleo fantasy and the youngest kids.
-> (b) **Reversible fade.** Severe neglect makes the animal "fade back into a
->     fossil" (a gentle, non-scary transition) that you can **re-excavate** — a
->     real consequence with no permanent loss, mirroring the ant-farm's
->     recoverable tunnel collapse.
-> (c) **Full stakes.** Same care-debt death as the aquarium (death card,
->     archived to the timeline), consistent with the rest of the game.
-> On-screen **predation** (anomalocaris eating a trilobite) is a separate axis
-> and should follow the existing snake-feeding parent toggle pattern — default
-> matter-of-fact, an option to soften. My recommendation: **(b)** — keeps a
-> real reason to care without teaching a 6-year-old that they re-killed the
-> dodo, and it reuses the reversible-consequence pattern already blessed for
-> the ant farm.
+> **DECIDED (John, 2026-07-09): FOSSIL-FADE (reversible).** A neglected animal
+> **fades back into a fossil** — a gentle, non-scary transition, no death card —
+> and is **re-excavated via the dig-brush sequence** (§6 hook). A real reason to
+> care with no permanent loss: "you can't lose them twice," and never the lesson
+> that a 6-year-old re-killed the dodo. It reuses the ant-farm's blessed
+> reversible-consequence pattern. John explicitly **accepts the added build
+> complexity** of the dig/excavate sequence for the fun factor, so that sequence
+> is specced as a first-class system (§6), not an optional flourish.
+> On-screen **predation** (anomalocaris eating a trilobite) is a separate axis,
+> governed by the **game-wide Nature-scenes parent toggle** (default shown,
+> matter-of-fact, no gore; alternative = off-screen event) — not a Paleo-specific
+> flag.
 
 ---
 
@@ -542,7 +549,7 @@ aquarium's proven budget with headroom to spare.
 | System | Budget | Approach |
 |---|---|---|
 | Agents (per wing) | **≤ 20 simulated + rendered** (well under aquarium's 42) | Same `Swarm.update` loop, same per-frame agent cost. Extinct animals are showpieces, not schools; only trilobites/ammonites cluster (loose, cheap boids). |
-| Locomotion | 0 new hot paths | Every mode already ships and is profiled: swim, crawler, climber, flutter, flight. Biped (if approximated, §4) is a crawler in the sim + a builder pose — no extra sim cost. |
+| Locomotion | 0 new hot paths | Every mode already ships and is profiled: swim, crawl, climb, flutter, flight. The approximated theropod gait (§4) is a `crawl` agent in the sim + a builder pose — no extra sim cost. |
 | Species visuals | Reuse builders | Invert-kit (trilobite/ammonite/anomalocaris) + fishbuilder (Dunkleosteus) reuse existing lofted-body + pattern shader. One new small `paleobuilder` for feathered/beaked forms (dodo, Archaeopteryx, theropods) — same `onBeforeCompile` PBR approach, no new shader tech. |
 | Environment | 2–3 quads + reused water stack | Glass box + substrate + era backdrop. Water stack (surface/caustics/bubbles) is on only in the wet era, exactly one era at a time. |
 | Fossil-dig canvas | 1 offscreen `CanvasTexture`, repaint on brush strokes only | Same cost profile as ant-farm soil + aquarium scrub overlay — a few cell repaints per second while actively brushing, idle otherwise. |
@@ -563,31 +570,36 @@ the confidence layer.
 
 | Species | Wing | Locomotion | Why it's in |
 |---|---|---|---|
-| Trilobite | Paleozoic | crawler (exists) | zero-new-code crawler; the "roll into a ball" surprise; cheap shoal |
+| Trilobite | Paleozoic | crawl (exists) | zero-new-code crawl agent; the "roll into a ball" surprise; cheap shoal |
 | Ammonite | Paleozoic | swim (exists) | swim reuse + the "we don't know its color" fact, the confidence layer's poster child |
 | Anomalocaris | Paleozoic | swim + eel-wave (exists) | predator drama via `canEat` (eats trilobites); apex-hunter wow |
-| Meganeura | Paleozoic | flutter (butterfly) | proves the flutter family carries over; giant-bug wow |
-| Sinosauropteryx | Mesozoic | biped **approximated as crawler** (§4a) | the **real ginger dinosaur color** star, with no new movement code |
-| Dodo | Recent | crawler (floor + waddle) | the emotional headliner; the tambalacoque fact; three-wing coverage |
+| Meganeura | Paleozoic (Carboniferous swamp) | flutter (butterfly) | proves the flutter family carries over + the wet→dry sub-theme; giant-bug wow |
+| Sinosauropteryx | Mesozoic | `crawl` **approximating a biped** (§4a) | the **real ginger dinosaur color** star, with no new movement code |
+| Dodo | Recent | crawl (floor + waddle) | the emotional headliner; the tambalacoque fact; three-wing coverage |
 
-**Systems in MVP:** Paleo environment builder with **two** era themes
-(`paleozoic` wet + `mesozoic`/`recent` dry — pick two of three to prove the
-era-switch); glass-grime + habitat-quality meters (reused); the confidence
-layer (meter bands + card provenance stamps — this is the brand, ship it);
-fossil-dig acquisition at **one** dig site (discovery-by-brush) with
-**coin-to-revive** (decision (c)); foods `detritus / plankton / livePrey /
-insects / fruit`; `paleobuilder` archetypes `dodo` + `theropod`, plus invert-kit
-`trilobite / ammonite / anomalocaris` and flutter `dragonfly`.
+**Systems in MVP:** Paleo environment builder carrying **every era theme the
+roster touches** — `paleozoic` marine (wet) + `carboniferous` swamp (dry) +
+`mesozoic` (dry) + `recent` (dry). The roster spans all three era **wings**
+(trilobite/ammonite/anomalocaris are Paleozoic-marine, Meganeura is the
+Paleozoic wing's dry Carboniferous swamp, Sinosauropteryx is Mesozoic, the dodo
+is Recent), so the honest MVP must ship all of them — they are cheap (one theme
+object each) and together they prove both the era-switch *and* the wet↔dry
+surface toggle (Meganeura would otherwise fly in a flooded tank). Plus
+glass-grime + habitat-quality meters (reused); the confidence layer (meter bands
++ card provenance stamps — this is the brand, ship it); fossil-dig acquisition at
+**one** dig site (discovery-by-brush) with **coin-to-revive** (decision (c)),
+and the fossil-fade recovery it doubles as; foods `detritus / plankton /
+livePrey / insects / fruit`; `paleobuilder` archetypes `dodo` + `theropod`, plus
+invert-kit `trilobite / ammonite / anomalocaris` and flutter `dragonfly`.
 
-**Deferred to v2+:** the third era wing; Microraptor + Archaeopteryx (need the
-aviary flight family + branch-perch polish); Dunkleosteus/Plesiosaur (size
-question — juvenile-scale or hold for a paddock); a real `biped` locomotion
-module (only if theropods graduate to marquee); the open-paddock enclosure
-option (b) as a "Big Animals" expansion; multi-dig-site + timeline "Tree of
-Time" full art.
+**Deferred to v2+:** Microraptor + Archaeopteryx (need the aviary flight family
++ branch-perch polish); Dunkleosteus/Plesiosaur (held for the Big-Animals
+paddock — decided); a real dedicated biped locomotion module (only if theropods
+graduate to marquee); the open-paddock enclosure option (b) as a "Big Animals"
+expansion; multi-dig-site + timeline "Tree of Time" full art.
 
 **Build order** (each step demoable to the 6-year-old QA department): era
 environment + theme switch → invert-kit trilobite/ammonite walking & swimming
 in a re-themed tank → confidence-layer card + meter bands → fossil-dig brush
-screen → Sinosauropteryx via crawler-as-biped → dodo + Meganeura → predation
+screen → Sinosauropteryx via crawl-as-biped → dodo + Meganeura → predation
 reveal (anomalocaris eats a trilobite) → offline dig reveal card.

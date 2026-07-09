@@ -26,7 +26,7 @@ no dark patterns, safe for a 6-year-old to own outright.
 
 | # | Habitat | Status | The "can't have" hook |
 |---|---------|--------|----------------------|
-| 1 | **Aquarium** | Live (fresh + salt, 178 species) | A 120-gallon show tank in your pocket |
+| 1 | **Aquarium** | Live (fresh + salt, 202 species) | A 120-gallon show tank in your pocket |
 | 2 | **Terrarium** | Next — cheap build, max engine reuse | Snakes, geckos, tarantulas, dart frogs |
 | 3 | **Firefly Jar** | Quick win on terrarium tech | The summer-night jar you never got to keep |
 | 4 | **Ant Farm** | The big swing — new sim tech | A living colony that digs while you sleep |

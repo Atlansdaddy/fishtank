@@ -45,7 +45,51 @@ export default {
         await env.SUBS.put(key, body);
         return json({ ok: true });
       }
+      if (req.method === 'DELETE') {         // admin cleanup (test tanks etc.)
+        if (!env.REPORT_TOKEN || url.searchParams.get('token') !== env.REPORT_TOKEN) return json({ ok: false }, 403);
+        await env.SUBS.delete(key);
+        return json({ ok: true });
+      }
       return json({ ok: false }, 405);
+    }
+
+    // ---- Habitat HQ: see every synced tank on the backend ----
+    // GET /tanks?token=…  JSON census; GET /admin?token=…  human dashboard
+    if ((url.pathname === '/tanks' || url.pathname === '/admin') && req.method === 'GET') {
+      if (!env.REPORT_TOKEN || url.searchParams.get('token') !== env.REPORT_TOKEN) return json({ ok: false }, 403);
+      const list = await env.SUBS.list({ prefix: 'save:', limit: 100 });
+      const saves = [];
+      for (const k of list.keys) {
+        const v = await env.SUBS.get(k.name);
+        if (!v) continue;
+        try {
+          const s = JSON.parse(v);
+          const tanks = {};
+          for (const w of ['fresh', 'salt']) {
+            const t = s.tanks && s.tanks[w]; if (!t) continue;
+            tanks[w] = {
+              water: t.water, algae: t.algae,
+              fish: (t.fish || []).map(f => ({
+                name: f.name, sp: f.sp, kind: f.kind || 'fish',
+                health: f.health, hunger: f.hunger, growth: f.growth == null ? 1 : f.growth,
+              })),
+            };
+          }
+          saves.push({
+            code: k.name.slice(5), lastSeen: s.lastSeen || 0, coins: s.coins,
+            keeperLevel: s.keeper && s.keeper.level, discovered: (s.discovered || []).length,
+            syncBytes: v.length, tanks,
+          });
+        } catch (e) {}
+      }
+      saves.sort((a, b) => b.lastSeen - a.lastSeen);
+      if (url.pathname === '/tanks') {
+        return new Response(JSON.stringify({ count: saves.length, tanks: saves }, null, 1),
+          { headers: { 'content-type': 'application/json', ...CORS } });
+      }
+      const crashes = await env.SUBS.list({ prefix: 'crash:', limit: 200 });
+      return new Response(adminHtml(saves, crashes.keys.length, url.searchParams.get('token')),
+        { headers: { 'content-type': 'text/html;charset=utf-8' } });
     }
 
     // ---- crash telemetry ----
@@ -137,6 +181,67 @@ async function sendPush(endpoint, env) {
 
 function kvKey(endpoint) { return 'sub:' + endpoint.slice(-160).replace(/[^a-zA-Z0-9._-]/g, '_'); }
 function json(o, status = 200) { return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', ...CORS } }); }
+
+// ---- Habitat HQ dashboard (server-rendered, zero dependencies) ----
+function adminHtml(saves, crashCount, token) {
+  const esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const ago = (ts) => {
+    if (!ts) return 'never';
+    const m = Math.round((Date.now() - ts) / 60000);
+    if (m < 2) return 'just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 48 * 60) return Math.round(m / 60) + ' h ago';
+    return Math.round(m / 1440) + ' days ago';
+  };
+  const pct = (v) => Math.round((v || 0) * 100);
+  const bar = (v, good) => `<span class="bar"><i style="width:${pct(v)}%;background:${(good ? v : 1 - v) > 0.55 ? '#7be08a' : (good ? v : 1 - v) > 0.3 ? '#ffcf5a' : '#ff6b5a'}"></i></span>`;
+  const spName = (sp) => sp.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const stage = (g) => g >= 1 ? '' : g > 0.65 ? ' 🐠' + pct(g) + '%' : ' 🌱' + pct(g) + '%';
+
+  const cards = saves.map((s) => {
+    const tankRows = ['fresh', 'salt'].map((w) => {
+      const t = s.tanks[w];
+      if (!t || !t.fish.length) return '';
+      const rows = t.fish.map((f) => `<tr>
+        <td>${f.kind === 'invert' ? '🐌' : '🐟'} <b>${esc(f.name)}</b></td>
+        <td class="dim">${esc(spName(f.sp))}${stage(f.growth)}</td>
+        <td>❤️ ${bar(f.health, true)}</td>
+        <td>🍽️ ${bar(f.hunger, false)}</td></tr>`).join('');
+      return `<h3>${w === 'fresh' ? '🌿 Freshwater' : '🐚 Saltwater'} — ${t.fish.length} animals
+        · 💧${pct(t.water)}% · 🟩${pct(t.algae)}%</h3>
+        <table>${rows}</table>`;
+    }).join('');
+    return `<div class="tank">
+      <div class="head"><b>☁️ ${esc(s.code)}</b>
+        <span class="dim">seen ${ago(s.lastSeen)} · 🎖️ Lv ${esc(s.keeperLevel ?? '?')} · 🪙 ${esc(s.coins ?? '?')}
+        · 📖 ${s.discovered} · ${(s.syncBytes / 1024).toFixed(1)} KB</span>
+        <button onclick="del('${esc(s.code)}')">🗑</button></div>
+      ${tankRows || '<div class="dim">No animals yet.</div>'}</div>`;
+  }).join('');
+
+  return `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Habitat HQ</title>
+<style>
+body{background:#04181a;color:#eaf6f2;font:14px/1.5 -apple-system,system-ui,sans-serif;margin:0;padding:16px;max-width:760px;margin:auto}
+h1{font-size:20px} h3{font-size:13px;margin:12px 0 4px;opacity:.9}
+.dim{opacity:.6;font-size:12px}
+.tank{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:12px 14px;margin:12px 0}
+.head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.head button{margin-left:auto;background:none;border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#eaf6f2;opacity:.5;cursor:pointer}
+table{border-collapse:collapse;width:100%} td{padding:2px 8px 2px 0;font-size:13px;white-space:nowrap}
+.bar{display:inline-block;width:52px;height:7px;border-radius:4px;background:rgba(255,255,255,.13);vertical-align:middle}
+.bar i{display:block;height:100%;border-radius:4px}
+a{color:#5fd0b0}
+</style></head><body>
+<h1>🐟 Habitat HQ</h1>
+<div class="dim">${saves.length} synced tank${saves.length === 1 ? '' : 's'} ·
+  <a href="/crashes?token=${encodeURIComponent(token)}">${crashCount} crash report${crashCount === 1 ? '' : 's'} on file</a></div>
+${cards || '<p class="dim">No tanks synced yet.</p>'}
+<script>
+function del(code){ if(!confirm('Delete cloud save '+code+'? The device copy is untouched.'))return;
+  fetch('/save/'+code+'?token=${encodeURIComponent(token)}',{method:'DELETE'}).then(()=>location.reload()); }
+</script></body></html>`;
+}
 function b64url(s) { return b64urlBytes(new TextEncoder().encode(s)); }
 function b64urlBytes(bytes) {
   let bin = ''; for (const b of bytes) bin += String.fromCharCode(b);

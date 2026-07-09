@@ -56,7 +56,7 @@ export const JAR = {
 };
 // Cylindrical bounds: clamp by radius, not min/max box.
 export const JAR_BOUNDS = {
-  R: JAR.R - 3,             // soft radial wall for flyers
+  R: JAR.R - 3,             // soft radial wall for the fliers
   minY: JAR.FLOOR_H + 1,
   maxY: JAR.RIM_Y - 4,      // fireflies pool under the lid — a real behavior
 };
@@ -100,17 +100,23 @@ core meters plus a per-bug "nights held" counter.
 | `tank.algae` (0→1) | **Condensation on glass** | Identical mechanic, cosmetic. Warm bugs in a sealed jar fog the inside of the glass; grows at an `ALGAE_DAYS`-style rate, dims the glows behind it (nice: your light show gets hazy if you neglect it). The existing wipe gesture (`sim.scrubAlgae(0.015)` per pointermove + sparkles in `main.js`) works unchanged — render as a front-facing fog overlay on the cylinder. |
 | hunger per fish | **Faint** (energy) | Reuse `f.hunger` verbatim but relabel to "energy." Adult fireflies barely eat (many don't eat at all — a real, kid-true fact), so `HUNGER_HOURS` is long (**≈ 40**) and feeding is optional flavor, not a fail state. Crickets/glow-worm do eat (see foods). Low energy dims a firefly's flash (glow intensity scales by `0.4 + 0.6*health`), it doesn't kill quickly. |
 | — (new, per bug) | **Nights held** (`f.nights`) | Increment each real dawn a bug is still in the jar. Drives the release loop and, depending on the DECISION below, drives a gentle glow-dimming / weakening. Stored on the fish record; free. |
-| Rotting-food pollution | Uneaten crumbs | Same as terrarium: uneaten food (nectar sponge, cricket crumbs) doesn't really pollute a jar — it just sits and is cleaned up. Tiny `UNEATEN_POLLUTION`. |
+| Rotting-food pollution | Uneaten crumbs | Same as terrarium: uneaten food (cricket crumbs, leftover greens) doesn't really pollute a jar — it just sits and is cleaned up. Tiny `UNEATEN_POLLUTION`. |
 | Offline decay | Identical | `applyOffline()` loops the jar exactly as it loops `['fresh','salt']` today. Crucially, **offline time advances `nights held`** — leave for the weekend and your fireflies have spent three nights in the jar (see §6). |
 
 `rules.js` `evaluateAdd()` runs **unchanged**. Bioload = jar air space (small
-capacity, `bioload: ~14`, `maxAgents: ~18`). `predator` covers the femme-fatale
-firefly and the glow-worm larva eating snails; `canEat` (0.42 ratio) lets a
-Photuris female eat a smaller Photinus — real, and the shop warns the kid at
-purchase, same path as the aquarium's "your oscar could eat this." `water !==
-current` blocks jar bugs from the fish tank and vice-versa. `soloOnly` tags the
-femme-fatale and moths (they don't need groups). `finNipper`/`longFins` stay
-`false` everywhere — schema and rules stay identical.
+capacity, `bioload: ~14`, `maxAgents: ~18`). The `predator` flag marks the
+femme-fatale firefly and the glow-worm (whose larvae really do hunt snails), and
+drives the **shop warning** at purchase, same path as the aquarium's "your oscar
+could eat this." **Important — the femme-fatale hunt does NOT go through
+`canEat`.** A Photuris female (1.6 cm) versus a Photinus (1.3 cm) is a 0.42 size
+ratio (`src/rules.js:86`) that fails the eat test and always will for two
+similar-sized fireflies, so `canEat` can never fire it. The mimic-hunt is instead
+a **scripted surprise-event predation** (see §4b/§6): explicitly exempt from
+`canEat`, triggered by the mimic state machine, with on-screen presentation
+governed by the game-wide Nature-scenes toggle. `water !== current` blocks jar
+bugs from the fish tank and vice-versa. `soloOnly` tags the femme-fatale and moths
+(they don't need groups). `finNipper`/`longFins` stay `false` everywhere — schema
+and rules stay identical.
 
 ## 3. Foods (`FOODS` sibling, same field shape)
 
@@ -119,32 +125,34 @@ column format matches the aquarium/terrarium foods table. `floatTime`/
 `sinkSpeed` semantics become `driftTime`/`settleSpeed` inside the jar food
 system (a `behavior: 'static'|'drip'` strategy per the ENGINE_SPLIT food plan).
 
+Per the DECISION below, **adult fireflies and moths don't eat on screen** — the
+eaters are the crickets and the glow-worm. `nectar` and `dewdrop` as *foods* are
+cut (dew survives only as the `freshenJar()` restore visual, not a food item).
+
 | id | name | emoji | eaten by | behavior when dropped |
 |---|---|---|---|---|
-| `nectar` | Nectar Sponge | 🍯 | fireflies (those that feed), moths | a droplet on the twig; bugs walk/fly to it and sip; `behavior:'static'` |
-| `pollen` | Pollen & Petals | 🌼 | moths, adult fireflies | small static tuft on the grass floor |
+| `pollen` | Pollen & Petals | 🌼 | crickets | small static tuft on the grass floor; part of the tree cricket's real diet |
 | `greens` | Clover & Leaf | 🍃 | crickets, katydid | static on the floor; the cricket's real diet |
-| `aphid` | Aphids | 🐛 | glow-worm, femme-fatale firefly, cricket | tiny crawling mini-agent on the floor (reuses the terrarium cricket-as-mini-agent idea, crawler arc); prey-seeking via `food.nearestFor` |
-| `dewdrop` | Dew Drop | 💧 | everyone (drink) | doubles as the `freshenJar()` restore visual; a droplet that all bugs sip from |
+| `aphid` | Aphids | 🐛 | glow-worm, cricket | tiny crawling mini-agent on the floor (reuses the terrarium cricket-as-mini-agent idea, `crawl` arc); prey-seeking via `food.nearestFor` |
 
-> **DECISION FOR JOHN — do fireflies eat on screen at all?** Adult fireflies
-> mostly don't feed (great honest fact). Options: (a) **no firefly food** — they
-> only need Air/Dew and release; foods exist just for crickets/glow-worm/moths
-> (simplest, most truthful); (b) **optional nectar** as flavor with zero fail
-> state (shown above); (c) drop the food system entirely for MVP and add it with
-> crickets later. Leaning (a)/(c); flagged so you decide the taste.
+> **DECIDED (John, 2026-07-09):** adult fireflies don't eat on screen — truthful,
+> since many adult fireflies barely feed or not at all. The eaters are the
+> crickets (greens/pollen/aphid) and the glow-worm (aphid). The optional
+> dew/nectar firefly foods are **cut**; dew remains only as the `freshenJar()`
+> care visual. Rationale: keeps the jar honest and the food system tiny, and it
+> makes the crickets the reason foods exist at all.
 
 ## 4. Locomotion — mapping to existing systems
 
 | Mode | Species | Implementation |
 |---|---|---|
-| **Flyer** (small new) | all flying fireflies, moths | New drift-flight steering, ~90 lines (below). Not boids-heavy — a firefly meanders alone. Moths add **phototaxis** (steer toward the brightest glow / the moon prop) — a genuinely charming, true behavior for almost no code. |
-| **Crawler** (exists) | glow-worm (flightless female), crickets, katydid, resting fireflies | `Agent.crawler` path verbatim on the **floor surface only** (`SURFACES.floor`), plus the twig as a perch. Crickets are *heard, rarely seen* — they mostly sit in the grass (long `_restLogic` rest episodes) and chirp (audio). |
-| **Rester / perch** (exists) | moths (between flights), fireflies at rest | Reuse the pleco glass-sit / `_restLogic` path: a moth flutters, then clings to the glass or twig for a long spell, wings slowly fanning (`invertbuilder` sway). Cheap and true — a moth on the jar wall is half the charm. |
+| **`flutter`** (small new) | all flying fireflies, moths | New drift-flight steering, ~90 lines (below); the canonical `flutter` locomotion module (shared with butterflies/moths). Not boids-heavy — a firefly meanders alone. Moths add **phototaxis** (steer toward the brightest glow / the moon prop) — a genuinely charming, true behavior for almost no code. |
+| **`crawl`** (exists) | glow-worm (flightless female), crickets, katydid, grounded fireflies | `crawl`-module path verbatim on the **floor surface only** (`SURFACES.floor`), plus the twig as a perch. Crickets are *heard, rarely seen* — they mostly sit in the grass (long `_restLogic` rest episodes) and chirp (audio). |
+| **rest / perch** (a *state*, not a locomotion value) | moths (between flights), fireflies at rest | Perch/rest is a behavioral **state** reachable from `flutter` (or `crawl`), NOT its own locomotion mode — a moth's `locomotion` stays `flutter`. Reuse the pleco glass-sit / `_restLogic` path: a moth flutters, then enters a long rest state clinging to the glass or twig, wings slowly fanning (`invertbuilder` sway). Cheap and true — a moth on the jar wall is half the charm. |
 
 Day/night drives all of it through `Swarm.nightFactor` exactly as today: by day
 everything is in a deep rest state (crickets silent, fireflies dark and still in
-the grass); at dusk the flyers take off and the blink system wakes. Fireflies
+the grass); at dusk the fliers take off and the blink system wakes. Fireflies
 also **pool near the lid at night** (`maxY` bias) — a real behavior and a pretty
 one.
 
@@ -163,13 +171,13 @@ and not a ballistic hop. Steering per frame:
   - `'J'` (Photinus pyralis): during the **charge→flash** window, arc upward in
     a short J-swoop; flash fires at the top of the hook. The classic "checkmark
     of light."
-  - `'hover'`: bob nearly in place (glow-worm-adjacent flyers, synchronous
+  - `'hover'`: bob nearly in place (glow-worm-adjacent fliers, synchronous
     species holding station).
   - `'drift'`: slow horizontal glide (blue ghost floats low and level).
 - **Phototaxis** (moths only): add a steering vector toward the brightest active
   glow in the jar (sample the fireflies + moon prop). Moths circling a firefly's
   light = free, real, and magical.
-- **Startle**: `startleNear()` reaches flyers already — a tap scatters them
+- **Startle**: `startleNear()` reaches fliers already — a tap scatters them
   upward/outward briefly, then they settle. Never violent.
 - **Radial wall**: the cylinder bound from §1 keeps them off the glass.
 
@@ -223,7 +231,7 @@ Per-species tuning lives on the spec (see §5 `flash`). Modes:
 | `glow` | steady on, no blinking (`uGlow` ~constant, slow breathe) | glow-worm, blue ghost |
 | `flicker` | rapid amber shimmer while flying | Pyractomena-type (future) |
 | `mimic` | copies a nearby male's pattern, then goes predatory | Photuris femme-fatale |
-| `none` | no light (moths, crickets) | Luna moth, crickets |
+| `none` | no light (moths, crickets) | Rosy maple moth, crickets |
 
 **Synchronization (the showpiece).** For `train` species with
 `flash.coupling > 0`, add one float per bug — a phase `θ` advancing at the
@@ -237,9 +245,15 @@ over same-species pairs, but n ≤ ~12 fireflies — trivial. This coupling cons
 is the single most magical dial in the pack.
 
 **Mimic (femme-fatale).** A `mimic` female runs a *copy* of a target species'
-pattern to lure a male, then switches to hunting (`predator` path in `Swarm`,
-reusing `_findPrey`/`_devour`). Whether the eat is shown → **DECISION FOR JOHN**,
-§6.
+pattern to lure a male, then switches to hunting. This predation **cannot** run
+through `canEat` — a 1.6 cm Photuris vs a 1.3 cm Photinus is a 0.42 size ratio
+(`src/rules.js:86`) that fails the eat test and always will for similar-sized
+fireflies. So the hunt is a **scripted surprise event** instead: the mimic beat
+plays out (copy → lure → close), then a scripted capture runs a matter-of-fact
+scale-down catch (`Swarm._devour`-style), **explicitly exempt from `canEat`**. It
+is a rare surprise (§6), and whether it's shown on-screen or resolved as an
+off-screen "she caught a meal last night" beat is governed by the game-wide
+Nature-scenes toggle (§6 DECIDED), not by any per-habitat flag.
 
 ## 5. Species plan
 
@@ -256,10 +270,16 @@ Terrarium approach):
   a small `beetle` archetype + lantern, moths = `moth` archetype, crickets =
   `cricket` archetype).
 - `zone`: `'air' | 'floor' | 'perch'` (replaces top/mid/bottom).
-- `locomotion`: `'flyer' | 'crawler' | 'rester'`.
-- New `flash`: the blink descriptor from §4b (the collection-book identity).
-- New `sound` (optional): chirp/song descriptor for the audio bed — the crickets
-  are heard, not seen.
+- `locomotion`: canonical registry values only — `'flutter'` (all fliers: fireflies
+  + moths) or `'crawl'` (glow-worm, crickets, katydid). Perch/rest is a behavioral
+  **state**, not a locomotion value (see §4). No `flyer`/`crawler`/`rester` aliases.
+- New `flash` (pack addition): the blink descriptor from §4b (the collection-book
+  identity). Nonstandard field, declared here.
+- New `sound` (pack addition, optional): chirp/song descriptor for the audio bed —
+  the crickets are heard, not seen. Nonstandard field, declared here.
+- New `edible` (pack addition, optional `boolean`): whether the bug can be eaten as
+  prey in-jar (crickets `true`; fireflies/glow-worm/moths `false` — fireflies carry
+  defensive lucibufagins). Nonstandard field, declared here.
 - Everything else — identical fields and types. `colors` are true-to-life (dark
   elytra, reddish pronotum, yellow margins for fireflies); `flash.color` is the
   real light color.
@@ -271,8 +291,8 @@ export const FIREFLYJAR_SPECIES = [
     scientific: 'Photinus pyralis',
     water: 'jar', kind: 'bug', adultSizeCm: 1.4, bioload: 1, minSchool: 4,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'air', locomotion: 'flyer',
-    speed: 0.6, schooling: 'loose', diet: ['nectar', 'dewdrop'], price: 8,
+    tags: [], zone: 'air', locomotion: 'flutter',
+    speed: 0.6, schooling: 'loose', diet: [], price: 8,
     archetype: 'firefly', size: 1.0,
     colors: { base: '#241d12', belly: '#f2d24a', fin: '#c85040',
       pattern: 'stripesH', patternColor: '#f0c840', patternScale: 1.2, iridescence: 0.15 },
@@ -291,8 +311,8 @@ export const FIREFLYJAR_SPECIES = [
     scientific: 'Photinus carolinus',
     water: 'jar', kind: 'bug', adultSizeCm: 1.3, bioload: 1, minSchool: 5,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'air', locomotion: 'flyer',
-    speed: 0.5, schooling: 'loose', diet: ['dewdrop'], price: 14,
+    tags: [], zone: 'air', locomotion: 'flutter',
+    speed: 0.5, schooling: 'loose', diet: [], price: 14,
     archetype: 'firefly', size: 0.95,
     colors: { base: '#221b10', belly: '#e8e0a0', fin: '#c04838',
       pattern: 'stripesH', patternColor: '#e8d858', patternScale: 1.1, iridescence: 0.12 },
@@ -304,15 +324,15 @@ export const FIREFLYJAR_SPECIES = [
       'They flash 5 to 8 times in a row, then everyone goes dark for about 8 seconds at the same moment.',
       'People camp out for just one week each summer to watch their light show.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'blue_ghost_firefly', common: 'Blue Ghost Firefly',
     scientific: 'Phausis reticulata',
     water: 'jar', kind: 'bug', adultSizeCm: 0.8, bioload: 1, minSchool: 4,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'air', locomotion: 'flyer',
-    speed: 0.4, schooling: 'loose', diet: ['dewdrop'], price: 16,
+    tags: [], zone: 'air', locomotion: 'flutter',
+    speed: 0.4, schooling: 'loose', diet: [], price: 16,
     archetype: 'firefly', size: 0.8,
     colors: { base: '#2a2418', belly: '#c8d8f0', fin: '#8a7a4a',
       pattern: 'none', patternColor: '#c8d8f0', patternScale: 1.0, iridescence: 0.2 },
@@ -324,15 +344,15 @@ export const FIREFLYJAR_SPECIES = [
       'Its light looks blue-white, while most fireflies glow yellow-green.',
       'The female has no wings and glows on the ground like a little lit-up worm.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'femme_fatale_firefly', common: 'Femme Fatale Firefly',
     scientific: 'Photuris versicolor',
     water: 'jar', kind: 'bug', adultSizeCm: 1.6, bioload: 1, minSchool: 1,
     temperament: 'aggressive', predator: true, finNipper: false, longFins: false,
-    tags: ['soloOnly'], zone: 'air', locomotion: 'flyer',
-    speed: 0.7, schooling: 'solo', diet: ['aphid'], price: 18,
+    tags: ['soloOnly'], zone: 'air', locomotion: 'flutter',
+    speed: 0.7, schooling: 'solo', diet: [], price: 18,
     archetype: 'firefly', size: 1.1, edible: false,
     colors: { base: '#1e2216', belly: '#d8e88a', fin: '#a88838',
       pattern: 'stripesH', patternColor: '#c8e060', patternScale: 1.0, iridescence: 0.15 },
@@ -344,14 +364,14 @@ export const FIREFLYJAR_SPECIES = [
       'Scientists call her the "femme fatale" firefly for this sneaky trick.',
       'She may eat other fireflies to steal chemicals that make her taste bad to hungry spiders.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'common_glow_worm', common: 'Common Glow-worm',
     scientific: 'Lampyris noctiluca',
     water: 'jar', kind: 'bug', adultSizeCm: 2.5, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'floor', locomotion: 'crawler',
+    tags: ['nocturnal'], zone: 'floor', locomotion: 'crawl',
     speed: 0.25, schooling: 'solo', diet: ['aphid'], price: 12,
     archetype: 'glowworm', size: 1.0, edible: false,
     colors: { base: '#3a3222', belly: '#9dff6e', fin: '#5a4c30',
@@ -367,22 +387,22 @@ export const FIREFLYJAR_SPECIES = [
     care: 'Easy'
   },
   {
-    id: 'luna_moth', common: 'Luna Moth',
-    scientific: 'Actias luna',
-    water: 'jar', kind: 'bug', adultSizeCm: 4.5, bioload: 2, minSchool: 1,
+    id: 'rosy_maple_moth', common: 'Rosy Maple Moth',
+    scientific: 'Dryocampa rubicunda',
+    water: 'jar', kind: 'bug', adultSizeCm: 3.5, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal', 'soloOnly'], zone: 'perch', locomotion: 'rester',
-    speed: 0.5, schooling: 'solo', diet: ['nectar', 'pollen'], price: 15,
-    archetype: 'moth', size: 1.4, shape: { finFlow: 1.3 },
-    colors: { base: '#b8e89a', belly: '#e8f4d8', fin: '#8ab070',
-      pattern: 'eyespot', patternColor: '#d8a850', patternScale: 1.1, iridescence: 0.1 },
+    tags: ['nocturnal', 'soloOnly'], zone: 'perch', locomotion: 'flutter',
+    speed: 0.5, schooling: 'solo', diet: [], price: 15,
+    archetype: 'moth', size: 1.1, shape: { finFlow: 1.1 },
+    colors: { base: '#f4a6c6', belly: '#f6e05e', fin: '#ec8ab5',
+      pattern: 'stripesV', patternColor: '#f6e05e', patternScale: 1.1, iridescence: 0.06 },
     flash: { mode: 'none', color: '#000000', flashMs: 0, gapMs: 0, count: 0, coupling: 0, path: 'hover' },
-    sound: { song: 'silent', wingHz: 8 },
-    habitat: 'Deciduous forests of eastern North America, flying only at night.',
+    sound: { song: 'silent', wingHz: 9 },
+    habitat: 'Deciduous woods of eastern North America, flying only at night.',
     facts: [
-      'The grown-up luna moth has no mouth and never eats — it lives only about a week, just long enough to find a mate.',
-      'Its long green tails spin as it flies, confusing the sonar of hunting bats.',
-      'It is one of the biggest moths in North America, as wide across as your hand.'
+      'It is painted in pink and yellow, like a little scoop of strawberry-and-lemon sherbet with wings.',
+      'It is one of the smallest of the giant silk moths — small enough to perch on your thumbnail.',
+      'The grown-up has no working mouth and never eats; it lives just a few nights, only long enough to find a mate.'
     ],
     care: 'Easy'
   },
@@ -391,7 +411,7 @@ export const FIREFLYJAR_SPECIES = [
     scientific: 'Oecanthus fultoni',
     water: 'jar', kind: 'bug', adultSizeCm: 1.5, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'floor', locomotion: 'crawler',
+    tags: ['nocturnal'], zone: 'floor', locomotion: 'crawl',
     speed: 0.4, schooling: 'solo', diet: ['greens', 'pollen'], price: 6,
     archetype: 'cricket', size: 0.8, edible: true,
     colors: { base: '#c8e0a0', belly: '#e0f0c8', fin: '#a0c078',
@@ -411,7 +431,7 @@ export const FIREFLYJAR_SPECIES = [
     scientific: 'Gryllus pennsylvanicus',
     water: 'jar', kind: 'bug', adultSizeCm: 2.5, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'floor', locomotion: 'crawler',
+    tags: ['nocturnal'], zone: 'floor', locomotion: 'crawl',
     speed: 0.5, schooling: 'solo', diet: ['greens', 'aphid'], price: 4,
     archetype: 'cricket', size: 1.0, edible: true,
     colors: { base: '#1c1712', belly: '#3a3026', fin: '#4a3a24',
@@ -434,7 +454,8 @@ more true fireflies (Big Dipper *Photinus marginellus*; amber *Pyractomena
 angulata* — `flash.mode:'flicker'`), the **Common True Katydid** (*Pterophylla
 camellifolia*, `sound` species, "Katy-did / Katy-didn't"), a small **Polyphemus
 moth**, and a **grasshopper** or **lacewing**. Total ~12–14. No species that
-needs new tech beyond flyer/crawler/rester + a `flash` or `sound` descriptor.
+needs new tech beyond `flutter`/`crawl` (+ the rest/perch state) + a `flash` or
+`sound` descriptor.
 
 ## 6. Retention mechanics (all four, per HABITAT_VISION)
 
@@ -459,51 +480,37 @@ needs new tech beyond flyer/crawler/rester + a `flash` or `sound` descriptor.
 - **Surprises.** Night-only reveal is the base surprise: the daytime jar is
   quiet (bugs tucked in the grass, no light); the show only starts at dusk
   (`rawDayFactor()→0`), so *checking at night is rewarded*. Rarer beats: a
-  femme-fatale's mimic-and-hunt (if shown — see DECISION); a moth circling a
+  femme-fatale's scripted mimic-and-hunt surprise event (presentation governed by
+  the game-wide Nature-scenes toggle — see DECIDED below); a moth circling a
   firefly's glow; the synchronous flock snapping into unison for the first time;
   a glowing larva appearing in the grass after a courtship.
 
-> **DECISION FOR JOHN — catch-and-release as a core mechanic (the values
-> call).** Real jars kill fireflies by morning; kids are taught to let them go.
-> Whether the game teaches that — and how hard — is a taste call, not mine.
-> Three concrete options:
->
-> - **(a) Release is the loop.** Fireflies weaken each night held (glow dims,
->   flash falters as `nights held` climbs; after ~2–3 nights they're listless).
->   **Releasing is the rewarded action:** tap "open the lid / make a wish," the
->   firefly rises out and flies off into the dark, and you earn a **wish/coin +
->   a keepsake in the book** (the flash-pattern card is *earned by releasing*,
->   not by keeping). Collection fills by letting go. Strongest lesson, best
->   story, boldest product choice; risk: a 6-year-old may feel loss.
-> - **(b) Magic sanctuary jar.** A never-ending storybook jar; bugs live
->   indefinitely with basic care like fish do. No release pressure, gentlest,
->   but it quietly teaches the *opposite* of the real lesson.
-> - **(c) Hybrid — keep-with-care, release-rewarded (recommended default,
->   mirrors the snake-feeding toggle spirit).** You *may* keep them, but
->   `nights held` dims their glow unless you `freshenJar()` (fresh grass + dew)
->   each night; releasing is always available and always gives the bigger reward
->   + the book stamp + a nightly **release streak**. Good care lets a patient
->   kid keep a favorite a while; the game clearly nudges toward letting go
->   without ever punishing. Could ship as a parent toggle: *Release ritual:
->   on/off*.
->
-> My lean is (c) as default with an (a)-flavored reward, but this is yours.
+> **DECIDED (John, 2026-07-09): catch-and-release is a matter-of-fact lifecycle,
+> with NO guilt machinery.** Keep-with-care works — a well-kept jar (`freshenJar()`
+> each night) holds bugs fine; **release exists as a simple action** — tap "open
+> the lid," the firefly rises out and flies off into the dark with a small
+> send-off. No weakening-as-punishment, no loss-shaming, no "you killed it"
+> beat. Fireflies have short real lives and natural death is shown **honestly and
+> plainly, exactly like everywhere else in the game** — not dramatized. Rationale
+> (John): fireflies dying is trivial; don't over-engineer values or guilt
+> mechanics around release. Release still gives a small reward + book stamp, but
+> it is offered, never coerced.
 
-> **DECISION FOR JOHN — femme-fatale predation on screen.** The Photuris female
-> luring and eating a male firefly is real, fascinating, and a little dark.
-> Options, mirroring the terrarium snake-feeding toggle: (a) **shown** —
-> mimic-lure, then a matter-of-fact scale-down catch like `Swarm._devour`, no
-> gore; (b) **off-screen** — she hunts as an offline event ("she caught a meal
-> last night"); (c) **omit the femme-fatale from the roster** and keep the jar
-> purely gentle. Default suggestion: (b), or a parent toggle shared with snake
-> feeding.
+> **DECIDED (John, 2026-07-09): femme-fatale predation is governed by the
+> game-wide Nature-scenes parent toggle** (default = shown, matter-of-fact, no
+> gore; alternative = resolved as an off-screen "she caught a meal last night"
+> event). The hunt runs as the **scripted surprise event** from §2/§4b — exempt
+> from `canEat`, never through the size-ratio path. Rationale: the
+> Nature-scenes law is now global (ROADMAP 2026-07-09) — one parent setting
+> governs ALL on-screen predation in every habitat, so per-habitat predation
+> flags are superseded and the femme-fatale simply obeys it.
 
-> **DECISION FOR JOHN — the daytime jar.** Night-only is decided; the question
-> is what daytime *shows*. Options: (a) a quiet daylit terrarium — bugs dozing
-> in the grass, crickets silent, a "come back at dusk" hint; (b) a locked/dark
-> "asleep" screen that only opens at night; (c) let daytime be a low-key care
-> window (freshen air, watch a cricket) with the magic saved for dusk. Leaning
-> (a)/(c) — a calm daytime beats a locked door.
+> **DECIDED (John, 2026-07-09): the daytime jar is a quiet, daylit jar** — bugs
+> hidden/resting in the grass, crickets silent, **care actions available** (freshen
+> air, watch a cricket, wipe condensation). **No locked screen.** The show starts
+> at dusk on the real clock (`rawDayFactor()→0`). Rationale: a calm daytime care
+> window beats a locked door, and saving the light show for dusk is what makes
+> checking at night rewarding.
 
 ## 7. Performance budget — S24-class, 60fps (the cheapest habitat)
 
@@ -529,21 +536,23 @@ with headroom to spare.
 
 | Species | Locomotion | Why |
 |---|---|---|
-| Common Eastern Firefly | flyer (new) | THE backyard firefly; proves flyer + single-flash + the J-swoop |
-| Synchronous Firefly | flyer | proves the sync coupling — the showpiece; do it early to de-risk |
-| Common Glow-worm | crawler (exists) | steady-glow mode + a floor bug, zero new movement code |
-| Field Cricket | crawler (exists) | the *heard-not-seen* audio mood, cheapest starter |
+| Common Eastern Firefly | `flutter` (new) | THE backyard firefly; proves `flutter` + single-flash + the J-swoop |
+| Synchronous Firefly | `flutter` | proves the sync coupling — the showpiece; do it early to de-risk |
+| Common Glow-worm | `crawl` (exists) | steady-glow mode + a floor bug, zero new movement code |
+| Field Cricket | `crawl` (exists) | the *heard-not-seen* audio mood, cheapest starter |
 
 Systems in MVP: jar environment builder (cylinder + radial bounds + grass
 floor + lid prop), **glow shader + blink state machine** (`jSwoop`, `train`
 with coupling, `glow`), drift-flight locomotion, Air & Dew + condensation
-meters, the **night-only day/night reveal**, foods deferred or `dewdrop`-only,
+meters, the **night-only day/night reveal**, foods deferred (adult bugs don't
+feed; crickets/glow-worm eat greens/aphid when foods ship),
 `invertbuilder` archetypes `firefly` + `glowworm` + `cricket`, cricket audio
-voice, and the **catch-and-release ritual per John's DECISION** (build the
-chosen option — this is the pack's defining interaction, not a deferral).
+voice, and the **catch-and-release action per John's DECISION** (matter-of-fact
+lifecycle, no guilt machinery — see §6).
 
-Deferred to v2: moths (`rester` + phototaxis), femme-fatale mimic/predation,
-the flash-pattern **identification** collection UI (MVP just stamps the card on
-catch; the guess-the-species game is v2), courtship→glowing-larvae breeding,
-`flicker` amber fireflies, katydid, moonbeam + moonlight pool, nectar/pollen
+Deferred to v2: moths (`flutter` + rest/perch state + phototaxis), the
+femme-fatale scripted mimic-hunt surprise event, the flash-pattern
+**identification** collection UI (MVP just stamps the card on catch; the
+guess-the-species game is v2), courtship→glowing-larvae breeding, `flicker` amber
+fireflies, katydid, moonbeam + moonlight pool, pollen
 foods.

@@ -69,3 +69,16 @@ curl 'https://habitat-push.YOURNAME.workers.dev/crashes?token=YOURTOKEN'
 ```
 
 That URL is the daily health check — newest 50 crashes, JSON.
+
+## Habitat HQ (backend tank viewer)
+
+Every synced tank already lives in KV — these endpoints make it visible:
+
+- `/admin?token=YOURTOKEN` — human dashboard: every family's tank, each animal
+  by name/species with health + hunger bars, growth stage, keeper level,
+  coins, last-seen, crash count. Delete buttons clean up test saves (the
+  device's local copy is never touched).
+- `/tanks?token=YOURTOKEN` — the same census as JSON (for scripts/routines).
+- `DELETE /save/<code>?token=YOURTOKEN` — remove one cloud save.
+
+Bookmark /admin on your phone — it's the parent's window into the aquarium.

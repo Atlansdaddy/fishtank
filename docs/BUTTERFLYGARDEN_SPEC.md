@@ -143,7 +143,7 @@ anchor (kept meaningful for shared code).
 | Stage | Real duration | Locomotion | `growth` drives | Feeds on | Payoff / event |
 |---|---|---|---|---|---|
 | **Egg** | ~0.5 day (`EGG_DAYS`) | none (static on host leaf) | subtle darkening + a tiny visible larva curled inside near hatch | — | tiny "hatched" toast; caterpillar crawls out |
-| **Caterpillar** | ~2.5 days (`GROW_DAYS`, reused) | **crawler** (existing) | body scale ↑, 5 instars (molt = shed prop, retention) | **host plant** — visibly, leaf-chew decals | grows fat; at `growth≈1` climbs a twig, hangs in a **J**, molts to chrysalis |
+| **Caterpillar** | ~2.5 days (`GROW_DAYS`, reused) | **`crawl`** (existing) | body scale ↑, 5 instars (molt = shed prop, retention) | **host plant** — visibly, leaf-chew decals | grows fat; at `growth≈1` climbs a twig, hangs in a **J**, molts to chrysalis |
 | **Chrysalis** | ~5–8 days (`CHRYSALIS_DAYS`) | none (attached to `perchId`) | color: opaque → **translucent**, wings showing through in the last ~10% | — | subtle wiggle; the **eclosure hold** (§2.4) |
 | **Adult** | days–weeks (§7, `ADULT_LIFE_DAYS`) | **flutter** (NEW, §3) | wing wear + fade as it ages; lays eggs mid-life (§7) | **nectar flowers** | the collection-book generation; eventual honest death |
 
@@ -178,7 +178,7 @@ lesson and the reason host-plant health is a care meter (§4).
   drops, the shader masks the leaf inward from the edges with a scalloped
   (cosine-noise) boundary — the classic caterpillar-chewed leaf silhouette.
   Cheap: one float per leaf, no geometry edits.
-- Caterpillar `hunger` rises as today; it crawls (existing crawler locomotion)
+- Caterpillar `hunger` rises as today; it crawls (existing `crawl` locomotion)
   toward its host and "eats" on contact (`food`-style eat tick against the
   plant instead of a `FoodSystem` item). A stripped host (`leafArea → 0`) means
   caterpillars stall (`canGrow` false) → the kid must replant (§4).
@@ -395,7 +395,7 @@ export const BUTTERFLY_SPECIES = [
       'Flip it over and it is dull brown with eye-spots, so a resting morpho vanishes.',
       'It does not sip flower nectar — it prefers the juice of rotting fruit on the forest floor.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'tiger_swallowtail', common: 'Eastern Tiger Swallowtail', scientific: 'Papilio glaucus',
@@ -463,14 +463,14 @@ export const BUTTERFLY_SPECIES = [
       'Every night a whole group roosts together on the same twigs, returning to the exact spot.',
       'Its slow, floaty flap makes it look like it is dancing on the air.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'atlas_moth', common: 'Atlas Moth', scientific: 'Attacus atlas',
     water: 'garden', kind: 'lep', adultSizeCm: 24, bioload: 3, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
     tags: ['nightShift', 'nomouth'], zone: 'canopy', locomotion: 'flutter', host: 'privet',
-    speed: 0.5, schooling: 'none', diet: [], price: 90,
+    speed: 0.5, schooling: 'solo', diet: [], price: 90,
     archetype: 'moth', size: 2.0,
     colors: { base: '#8a4a22', belly: '#a86838', fin: '#3a2010',
       pattern: 'patches', patternColor: '#e0b070', patternScale: 1.3, iridescence: 0.1 },
@@ -480,14 +480,14 @@ export const BUTTERFLY_SPECIES = [
       'The grown-up moth has NO mouth and cannot eat, so it lives only about one to two weeks.',
       'The tips of its wings look like snake heads to scare away hungry birds.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'luna_moth', common: 'Luna Moth', scientific: 'Actias luna',
     water: 'garden', kind: 'lep', adultSizeCm: 11, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
     tags: ['nightShift', 'nomouth'], zone: 'canopy', locomotion: 'flutter', host: 'walnut',
-    speed: 0.55, schooling: 'none', diet: [], price: 55,
+    speed: 0.55, schooling: 'solo', diet: [], price: 55,
     archetype: 'moth', size: 1.15, shape: { finFlow: 1.5 },
     colors: { base: '#a8e0a0', belly: '#c0e8b8', fin: '#7a3a58',
       pattern: 'spots', patternColor: '#e8e0a0', patternScale: 1.0, iridescence: 0.2 },
@@ -497,7 +497,7 @@ export const BUTTERFLY_SPECIES = [
       'Like the atlas moth, an adult luna has no mouth and never eats; it lives about a week.',
       'Its long twisty tails confuse bats by scrambling the echoes bats use to hunt.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
 ];
 ```

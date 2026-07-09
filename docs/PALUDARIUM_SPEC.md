@@ -118,14 +118,10 @@ palud: {
 }
 ```
 
-> **DECISION FOR JOHN — waterline height.** (a) **Fixed 40%** — simplest, one
-> constant, reads as a shore, MVP default. (b) **Adjustable** via a "water
-> level" tool (kid raises/lowers it; flood the beach or expose more land) —
-> charming and toy-like but every dependent constant (basking rock height,
-> plant placement, agent spawn zones) must re-derive live. (c) **Species-driven
-> presets** — a "turtle pond" (deep, small beach) vs a "crab shore" (shallow,
-> big beach) chosen when you first stock it. Recommend (a) for MVP, (b) as a
-> post-launch delighter.
+> **DECIDED (John, 2026-07-09): (a) fixed 40% waterline for MVP.** One constant,
+> reads as a shore, and no dependent constant (basking rock height, plant
+> placement, spawn zones) has to re-derive live. Adjustable water level (option
+> b) is parked as a post-launch delighter (see §9 Deferred).
 
 ## 2. Care model mapping (reuse `CareSim` in `src/sim.js`)
 
@@ -141,23 +137,12 @@ bars is where "calm pet" becomes "chore app."
 | `tank.algae` (0→1) | **Dirty glass** | Unchanged: the existing wipe gesture (`sim.scrubAlgae`) clears front-pane grime. Grows a touch faster (more light on a planted shore). |
 | Terrarium `humidity` | **Humidity — DERIVED, not a chore** (recommended) | Because there is standing water, humidity is *supplied by the pond*. Model it as a **readout driven by water level + a misting top-up**, not an independent decaying bar: `humidity = clamp(0.55 + 0.4*waterFillFrac - dryPenalty)`. Land species have a comfort band (`humidity` field) exactly as terrarium; it only dips below comfort if the kid lets the *water* crash. This folds the second husbandry axis into the water meter they already tend. |
 
-> **DECISION FOR JOHN — how many meters.** Three real options, and this is the
-> single most important taste call in the pack:
-> - (a) **Two meters + derived humidity (RECOMMENDED).** Kid tends *water
->   quality* and *dirty glass* — the same two they already know from the
->   aquarium. Humidity is a green/amber readout that only complains when the
->   water is neglected. One mental model, land and water share a fate. Calm.
-> - (b) **Three independent meters** (water, humidity via misting, glass).
->   Husbandry-accurate, but it's the first habitat to ask a kid to keep three
->   bars up, and the mist ritual competes with the water-change ritual. Risks
->   the "too many chores" cliff HABITAT_VISION explicitly warns against.
-> - (c) **One unified "Habitat health"** rolling water+humidity+glass into a
->   single bar. Maximally calm, but throws away the cause-and-effect teaching
->   that is the whole educational point.
->
-> My read: **(a)**. It keeps the aquarium's two-meter muscle memory, honors the
-> real biology (a paludarium *is* humid because it's half water), and never
-> makes the kid tend three decaying bars.
+> **DECIDED (John, 2026-07-09): (a) two meters + derived humidity.** Kid tends
+> *water quality* and *dirty glass* — the same two muscle-memory meters as the
+> aquarium — and humidity is a green/amber readout that only complains when the
+> water is neglected. It honors the real biology (a paludarium *is* humid
+> because it's half water) and never asks a 6-year-old to keep three decaying
+> bars up, staying clear of the "too many chores" cliff.
 
 `applyOffline()` loops the paludarium's tank(s) exactly as it loops
 `['fresh','salt']` today — no change; offline decay hits water quality and the
@@ -186,25 +171,23 @@ dropped over the beach, or a cricket that hops into the water.
 | `cricket` | Crickets | 🦗 | `hop` (terrarium hop-arc mini-agent) | frogs, toads, mudskipper, crabs, newt | **Hops into the water:** becomes a struggling swimmer at the surface — archerfish/fish snap it, or a frog grabs it. Emergent and true. |
 | `worm` | Bloodworms / Mealworms | 🪱 | `sink` in water / `static` on land | almost everyone | Dual-natured: the aquatic worm sinks (existing `frozen`), the land worm wiggles in place. Same id, behavior chosen by where it lands. |
 | `veggie` | Greens | 🥬 | `static` | koi, turtles, fiddler crabs, hermit crabs, tadpoles (algae phase) | Sits on land or sinks slowly in water; both halves' herbivores browse it. |
+| `fruit` | Fruit | 🍓 | `static` (land) | land hermit crab, fiddler crabs, turtles | A land-food (same row exists in the terrarium pack). Sits on the beach; the land hermit crab's favorite. If it lands in water it slowly sinks and softens — koi/turtles will still nibble it. |
 
 The `FoodSystem.update` per-item strategy keys off `FOODS[type].behavior`, and
 each item checks its own `y` vs `uWaterY` each frame to decide land-rules vs
 water-rules — the mask uniform is reused as sim data, not just a shader input.
 `nearestFor`/`eat`/rot accounting are unchanged from `food.js`.
 
-> **DECISION FOR JOHN — fish food on the beach.** (a) **Forageable** — beach
-> critters (mudskipper, crabs) eat stranded fish food; nothing is wasted, and it
-> teaches "the shore has its own cleanup crew." (b) **Wasted & rots** — misplaced
-> food sits, rots, dings water quality; teaches *aim your feeding* (matches the
-> aquarium's uneaten-food pollution lesson). (c) **Can't drop there** — the feed
-> tool only drops over water; land species are fed from a separate land-feed tap.
-> Recommend (a): it makes the mudskipper and crabs feel purposeful and keeps the
-> tone forgiving, with a small rot penalty if nothing eats it within the window.
+> **DECIDED (John, 2026-07-09): (a) fish food on the beach is forageable by
+> beach critters.** Stranded fish food is eaten by the mudskipper and crabs, so
+> nothing is wasted and the shore reads as having its own cleanup crew — with a
+> small rot penalty (dinging water quality) if nothing eats it within the
+> window, keeping the tone forgiving but not consequence-free.
 
 ## 4. Locomotion — amphibious agents (the one new movement system)
 
 Four locomotion names already exist or are trivially reused: `swim` (aquarium),
-`crawl`/`climb` (terrarium, verbatim for crabs), `hopper` (terrarium),
+`crawl`/`climb` (terrarium, verbatim for crabs), `hop` (terrarium),
 `serpent` (unused here). The **new** thing is `amphibious`: an agent that owns
 two of the above sub-modes and switches between them at the waterline.
 
@@ -237,9 +220,9 @@ amphibious wrapper only owns the transition.
 - **EMERGE** (0.3 s): a short scripted clamber — Y lerps from `WATER_LINE` up
   the bank, body pitches nose-up, gait crossfades swim→land. The world-Y mask
   makes the half-out-of-water look free during this beat.
-- **LAND**: runs `landMode` (`crawl` for turtle/crab/mudskipper, `hopper` for
+- **LAND**: runs `landMode` (`crawl` for turtle/crab/mudskipper, `hop` for
   frog/toad/newt) with Y pinned to `terrainY` and the terrarium wall/branch
-  surfaces available if the mode is a climber.
+  surfaces available if the mode is a `climb`er.
 - **wantsWater triggers**: baskNeed satisfied, hunger with food only in water,
   a land threat (tap-startle on land), a random dive timer, or (mudskipper)
   drying out — a `wetness` value that falls on land and forces a return.
@@ -251,13 +234,13 @@ Per-species tuning of the same machine:
 | Species | waterMode | landMode | Driver character |
 |---|---|---|---|
 | **Red-eared slider** (turtle) | `swim` (bottom/all zone) | `crawl` (slow, `tortoise`-speed) | Long basks on the shore rock when day factor is high; dives to feed. The archetypal amphibian beat. |
-| **Fire-bellied toad** | `swim` (paddling, shallow) | `hopper` | Spends "as much time paddling as hopping" (its real fact) — short random cross timers both ways, stays near the shoreline. |
-| **Mudskipper** (the mascot) | `swim` (darty, surface) | `crawl` (pectoral-fin "skitter", `crab`-fast) — **a fish that walks out** | `wetness` driver: crawls out to forage/bask, must return before drying; can climb the low glass a little (reuse climber glue). |
+| **Fire-bellied toad** | `swim` (paddling, shallow) | `hop` | Spends "as much time paddling as hopping" (its real fact) — short random cross timers both ways, stays near the shoreline. |
+| **Mudskipper** (the mascot) | `swim` (darty, surface) | `crawl` (pectoral-fin "skitter", `crab`-fast) — **a fish that walks out** | `wetness` driver: crawls out to forage/bask, must return before drying; can climb the low glass a little (reuse `climb` glue). |
 | **Newt** | `swim` | `crawl` (salamander gait) | Seasonal-ish: biased to water when young/hungry, land when resting. |
-| **Frog (tree/pond)** | `swim` (brief) | `hopper` (+ branch perch) | Mostly land/branch; dives only when startled or to lay (breeding). |
+| **Frog (tree/pond)** | `swim` (brief) | `hop` (+ branch perch) | Mostly land/branch; dives only when startled or to lay (breeding). |
 
 Crabs (**fiddler**, **land hermit**) are **not** amphibious agents — they are
-terrarium `crawler`/`climber` verbatim, living on the beach and bank, dipping a
+terrarium `crawl`/`climb` verbatim, living on the beach and bank, dipping a
 claw in the shallows for humidity but never swimming. Zero new movement code.
 Koi and archerfish are **pure `swim`** (aquarium agents) that never leave the
 water — the amphibious system is opt-in per species, not imposed on the pack.
@@ -283,14 +266,14 @@ if (f.metamorph && (f.growth ?? 1) >= META && !f.metamorphed) {
 `main.js` handles the `metamorphose` event the way it handles `death`/`birth`:
 dispose the tadpole `Object3D`, build the adult via `buildAgentVisual(newSpec)`,
 hand the new visual to the *same* `Agent.instId` but re-init its locomotion from
-`swim` to `amphibious` (`hopper` landMode). Growth continues from `META`→1 as a
+`swim` to `amphibious` (`hop` landMode). Growth continues from `META`→1 as a
 juvenile frog. Stages, all from one growth scalar:
 
 | `f.growth` | Stage | Builder / locomotion | Visual |
 |---|---|---|---|
 | 0.10–0.35 | Tadpole | `tadpole` swim | Round body, big tail, no legs |
 | 0.35–0.60 | Legged tadpole | `tadpole` swim (leg buds) | Back legs sprout (shader/morph, cheap) |
-| **0.60** | **Metamorphosis** | swim → amphibious(hopper) | Builder swap event; tail resorbs |
+| **0.60** | **Metamorphosis** | swim → amphibious(hop) | Builder swap event; tail resorbs |
 | 0.60–1.0 | Juvenile frog | amphibious | Grows to adult size normally |
 
 The intermediate leg-bud visual is a cheap tweak of the tadpole model (a couple
@@ -299,19 +282,22 @@ of scaled cylinders faded in by `growth`), not a third builder — only the
 and every fish already use; the only additions are one threshold check and one
 event type.
 
-> **DECISION FOR JOHN — where do tadpoles come from.** (a) **Buy tadpoles** in
-> the shop; they metamorphose into the frog you paid for — simplest, the
-> transformation is the reward. (b) **Breed** adult frogs → eggs → tadpoles
-> (extends the livebearer breeding path in `_decay` to an egg→larva chain) — the
-> deepest loop, a real "my frogs had babies AND they changed shape" moment. (c)
-> **Both**: buy your first, breed thereafter. Recommend (a) for MVP (proves the
-> builder-swap), (c) as the full Pond experience.
+> **DECIDED (John, 2026-07-09): (a) buy tadpoles at MVP, (c) breeding added
+> later.** MVP sells tadpoles in the shop that metamorphose into the frog you
+> paid for — the transformation itself is the reward and it proves the
+> builder-swap. Frog breeding (adult → eggs → tadpoles, extending the livebearer
+> egg→larva chain) is layered on afterward for the full Pond experience.
 
 ## 5. Hermit-crab shell-swap mechanic (the Crabitat concept)
 
 Land hermit crabs live in borrowed shells and **trade up as they grow**. Shells
 are collectible items in the world, tied to `f.growth`, and the kid can drop new
 ones in. Concretely:
+
+> **Ownership (canonical):** the land hermit crab is owned by THIS pack under the
+> id **`land_hermit_crab`** (§6). TERRARIUM's duplicate `hermit_crab` id is being
+> removed — the shell-swap mechanic below is the paludarium's, not the
+> terrarium's. Future authors: build the hermit crab here, do not re-duplicate it.
 
 ### 5.1 Shells as items
 
@@ -345,7 +331,7 @@ growth crosses band → needsShell=true → seek nearest EMPTY shell of size >= 
 
 - **Swap animation**: crab backs out of the old shell (body briefly bare and
   vulnerable — a genuine surprise beat, §7), scuttles to the new one, reverses
-  in. Reuses the `crawler` orient/scuttle code; the "bare" moment is just the
+  in. Reuses the `crawl` orient/scuttle code; the "bare" moment is just the
   shell part hidden for ~1 s.
 - **Old shell** stays in the world as an empty collectible — a smaller crab can
   later claim it (the real biology of a shell exchange chain, and the "line up
@@ -358,12 +344,11 @@ chosen size onto the beach (same drop path as food, `behavior:'static'`). This
 is the kid's lever to keep crabs housed as they grow — a care action that isn't
 a decaying meter, which fits the calm brief.
 
-> **DECISION FOR JOHN — shell supply.** (a) **Free shells** from the Shell tool,
-> unlimited — never a dead end, pure toy. (b) **Bought shells** (a few coins
-> each) — a small economy sink, teaches "your growing pet needs new things." (c)
-> **Finite/scarce** shells that create the biggest-to-smallest trading-line
-> drama on purpose. Recommend (a) or (b); (c) risks a stuck, unhappy crab a
-> 6-year-old can't fix.
+> **DECIDED (John, 2026-07-09): shells are cheap shop items (bought).** The
+> Shell tool drops shells the kid buys for a few coins each — a small economy
+> sink that fits the coin loop and makes dropping a new shell a deliberate kid
+> choice ("your growing pet needs new things"), while never being the scarce
+> dead-end (option c) that could strand a crab a 6-year-old can't rescue.
 
 ## 6. Species plan
 
@@ -383,13 +368,23 @@ paludarium deltas applied consistently:
 - `water: 'palud'`.
 - `zone`: `'aquatic' | 'beach' | 'land' | 'arboreal'` (where it lives; maps to
   spawn side and Y-clamp).
-- `locomotion`: `'swim' | 'amphibious' | 'crawler' | 'climber' | 'hopper'`.
+- `locomotion`: `'swim' | 'amphibious' | 'crawl' | 'climb' | 'hop'` (canonical
+  registry names, `ENGINE_SPLIT.md`).
 - `landMode`/`waterMode`: present only when `locomotion:'amphibious'`.
 - `humidity`: comfort center (drives the derived-humidity readout, §2).
-- New optional flags: `basker`, `shellUser`, `metamorph` (id of the adult a
-  larva becomes), `spitter` (archerfish).
+- `basker` is a **tag** (`tags:['basker']`), not a boolean field — the
+  TERRARIUM precedent; the turtle carries it in its `tags` array.
+- New optional flags: `shellUser`, `metamorph` (id of the adult a larva
+  becomes), `spitter` (archerfish).
 - Everything else — identical fields, identical types, true-to-life `colors`,
   exactly 3 kid-true `facts`.
+
+**Cross-spec ownership (canonical).** This pack **OWNS** two ids that must not
+be duplicated elsewhere: **`fire_bellied_toad`** (`water:'palud'`, amphibious —
+TERRARIUM is being edited to swap its copy for a fully terrestrial frog), and
+the land hermit crab **`land_hermit_crab`** (TERRARIUM's duplicate
+`hermit_crab` is being removed). Future authors: do not re-add either to another
+pack.
 
 ```js
 export const PALUDARIUM_SPECIES = [
@@ -397,7 +392,7 @@ export const PALUDARIUM_SPECIES = [
     id: 'mudskipper', common: 'Atlantic Mudskipper', scientific: 'Periophthalmus barbarus',
     water: 'palud', kind: 'fish', adultSizeCm: 16, bioload: 3, minSchool: 2,
     temperament: 'semi', predator: false, finNipper: false, longFins: false,
-    tags: ['jumper'], zone: 'beach', locomotion: 'amphibious', waterMode: 'swim', landMode: 'crawler',
+    tags: ['jumper'], zone: 'beach', locomotion: 'amphibious', waterMode: 'swim', landMode: 'crawl',
     humidity: 0.8, speed: 0.9, schooling: 'loose', diet: ['cricket', 'worm', 'flake'], price: 40,
     archetype: 'goby', size: 1.0, shape: { height: 0.9, finFlow: 1.1 },
     colors: { base: '#6b5a3a', belly: '#c8bfa0', fin: '#3a6ea8',
@@ -408,13 +403,13 @@ export const PALUDARIUM_SPECIES = [
       'It breathes through its wet skin and mouth, so it can leave the water for hours.',
       'It carries a mouthful of water like a scuba tank to keep its gills wet on land.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'fiddler_crab', common: 'Fiddler Crab', scientific: 'Uca pugnax',
     water: 'palud', kind: 'invert', adultSizeCm: 4, bioload: 1, minSchool: 3,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'beach', locomotion: 'crawler', humidity: 0.8,
+    tags: [], zone: 'beach', locomotion: 'crawl', humidity: 0.8,
     speed: 0.4, schooling: 'loose', diet: ['veggie', 'flake', 'worm'], price: 15,
     archetype: 'crab', size: 0.55, edible: false, cleans: true,
     colors: { base: '#6a4a30', belly: '#8a6a48', fin: '#e0b040',
@@ -431,9 +426,9 @@ export const PALUDARIUM_SPECIES = [
     id: 'red_eared_slider', common: 'Red-Eared Slider', scientific: 'Trachemys scripta elegans',
     water: 'palud', kind: 'herp', adultSizeCm: 25, bioload: 12, minSchool: 1,
     temperament: 'semi', predator: true, finNipper: false, longFins: false,
-    tags: ['soloOnly', 'basker'], zone: 'aquatic', locomotion: 'amphibious', waterMode: 'swim', landMode: 'crawler',
-    humidity: 0.7, speed: 0.6, schooling: 'none', diet: ['turtlestick', 'pellet', 'veggie', 'worm'], price: 85,
-    archetype: 'turtle', size: 1.3, basker: true,
+    tags: ['soloOnly', 'basker'], zone: 'aquatic', locomotion: 'amphibious', waterMode: 'swim', landMode: 'crawl',
+    humidity: 0.7, speed: 0.6, schooling: 'solo', diet: ['turtlestick', 'pellet', 'veggie', 'worm'], price: 85,
+    archetype: 'turtle', size: 1.3,
     colors: { base: '#3a6a34', belly: '#d8c84a', fin: '#5a8a3a',
       pattern: 'stripesV', patternColor: '#d8b020', patternScale: 1.2, iridescence: 0.05 },
     habitat: 'Slow rivers, ponds, and marshes across the southern United States.',
@@ -442,13 +437,16 @@ export const PALUDARIUM_SPECIES = [
       'It basks in the sun for hours to warm up and keep its shell healthy, then slips back to swim.',
       'A slider can pull its head and all four legs inside its shell like a suitcase snapping shut.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
+    // OWNED BY THIS PACK (canonical): fire_bellied_toad lives here as an
+    // amphibious palud species; TERRARIUM's copy is being swapped for a fully
+    // terrestrial frog. Do not re-duplicate this id in another pack.
     id: 'fire_bellied_toad', common: 'Oriental Fire-Bellied Toad', scientific: 'Bombina orientalis',
     water: 'palud', kind: 'herp', adultSizeCm: 5, bioload: 1, minSchool: 3,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'beach', locomotion: 'amphibious', waterMode: 'swim', landMode: 'hopper',
+    tags: [], zone: 'beach', locomotion: 'amphibious', waterMode: 'swim', landMode: 'hop',
     humidity: 0.85, speed: 0.8, schooling: 'loose', diet: ['cricket', 'worm'], price: 25,
     archetype: 'frog', size: 0.6, metamorph: null,
     colors: { base: '#4a9838', belly: '#e83818', fin: '#2a6820',
@@ -494,13 +492,15 @@ export const PALUDARIUM_SPECIES = [
       'They learn to recognize the person who feeds them and will eat from your hand.',
       'Each koi\'s red, white, and black pattern is unique, like a painting no one can copy.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
+    // OWNED BY THIS PACK (canonical): land_hermit_crab is the single canonical
+    // land hermit crab id. TERRARIUM's duplicate `hermit_crab` is being removed.
     id: 'land_hermit_crab', common: 'Caribbean Land Hermit Crab', scientific: 'Coenobita clypeatus',
     water: 'palud', kind: 'invert', adultSizeCm: 8, bioload: 2, minSchool: 2,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'beach', locomotion: 'climber', humidity: 0.8,
+    tags: ['nocturnal'], zone: 'beach', locomotion: 'climb', humidity: 0.8,
     speed: 0.6, schooling: 'loose', diet: ['fruit', 'veggie', 'flake'], price: 20,
     archetype: 'crab', size: 0.9, edible: false, cleans: true, shellUser: true,
     colors: { base: '#b06a3a', belly: '#c88850', fin: '#c8b090',
@@ -528,7 +528,7 @@ export const PALUDARIUM_SPECIES = [
       'It aims so well it hits targets over a foot away, bending its shot for the way light tricks the eye.',
       'When a knocked-down bug hits the water, the whole group races to grab the snack.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
 ];
 ```
@@ -544,34 +544,25 @@ and the school races in (existing `nearestFor` congregation). No new physics —
 a raycast from fish to food, a particle streak, and a "detach food → drop it"
 state change.
 
-> **DECISION FOR JOHN — archerfish spit.** (a) **Full signature moment** —
-> aim, jet particle, knockdown, feeding race. It is *the* wow of this pack and
-> it's cheap (raycast + reuse the bubble particles). (b) **Cosmetic only** —
-> the fish spits at any surface bug ambiently, purely for show, food isn't
-> gated on it. (c) **Skip for MVP** — archerfish is a normal fish that eats
-> crickets that fall in on their own. Recommend (a): the cost is low and the
-> payoff is high, but it's a milestone after the amphibious core lands.
+> **DECIDED (John, 2026-07-09): (a) full signature moment.** The archerfish
+> aims, fires a jet particle, knocks the bug down, and the school races in — it
+> is *the* wow of this pack and it's cheap (a raycast plus reused bubble
+> particles). It lands as its own milestone after the amphibious core is solid
+> (see §9 Deferred).
 
-> **DECISION FOR JOHN — the axolotl.** Terrarium already lists the axolotl as a
-> `water:'fresh'` crossover that lives in the *aquarium*. It is a far more
-> natural paludarium resident (it's aquatic but it's an amphibian). (a) **Leave
-> it in the aquarium** as the terrarium tease (no change, no new work). (b)
-> **Move it here** as a paludarium species (`water:'palud'`, pure `swim`, deep
-> end) — thematically perfect, but re-homes a species and re-points the
-> terrarium shop tease. (c) **List it in both** shop tabs, one shared spec — max
-> discoverability, slight save/rules bookkeeping. Recommend (a) unless you want
-> the paludarium's fish roster to feel more special, then (b).
+> **DECIDED (John, 2026-07-09): (a) the axolotl stays in the aquarium.** It
+> remains the `water:'fresh'` aquarium resident and serves as the crossover
+> tease pointing toward the paludarium — no re-home, no new work, and the
+> terrarium/aquarium shop tease keeps pointing where it already does.
 
-> **DECISION FOR JOHN — turtles eating tankmates.** Real red-eared sliders eat
-> small fish and fry. `predator:true` + `canEat` (0.42 ratio) already means a
-> slider will hunt guppies, tadpoles, and small crabs on screen — dramatic and
-> true, but a kid may be upset to lose a named koi baby. (a) **Predator on**
-> (default, matter-of-fact like the snake feeding in terrarium) — `rules.js`
-> already *warns* at purchase. (b) **Herbivore mode toggle** (parent setting,
-> mirrors the snake-feeding toggle) — turtle eats only sticks/veg on screen,
-> real diet still stated in the facts. (c) **Off** — turtle never predates.
-> Recommend the terrarium precedent: **(a) with the parent toggle from (b)**,
-> default shown, warned by rules, honest in the facts.
+> **DECIDED (John, 2026-07-09): turtle predation is governed by the game-wide
+> Nature-scenes parent toggle.** Real red-eared sliders eat small fish and fry
+> (`predator:true` + `canEat` 0.42 ratio), so a slider will hunt guppies,
+> tadpoles, and small crabs on screen. There is no per-habitat flag: the single
+> game-wide Nature-scenes parent setting (ROADMAP 2026-07-09) governs it —
+> default shown, matter-of-fact, no gore; alternative resolves it off-screen.
+> `rules.js` still warns at purchase and the real diet stays honest in the
+> facts. This supersedes the earlier per-habitat predation flag.
 
 ## 7. The four retention mechanics, made concrete
 
@@ -606,8 +597,10 @@ visible** in a way no fish tank can match.
 
 This is the pack that renders an aquarium **and** a terrarium in one frame, so
 the budget is real and the mitigations matter. Baseline: the live game holds 60
-fps with 42 fish + inverts + full aquarium FX on an S24. Paludarium must fit the
-*same* budget, not double it.
+fps with a full house of animals + full aquarium FX on an S24, where
+`CAPACITY.maxFish = 42` (src/constants.js:25) is the **total animal cap — fish
+*and* inverts combined**, not 42 fish plus extra inverts. Paludarium must fit
+the *same* budget, not double it.
 
 | Cost center | Aquarium today | Paludarium | Mitigation |
 |---|---|---|---|
@@ -642,16 +635,16 @@ one metamorphosis, one shell-swap, both feeding halves.
 | Koi (×1–2) | pond centerpiece | swim (aquarium reuse) | Proves the underwater half is just the aquarium; growth story; zero new code. |
 | Danio or guppy (pond fish) | shoal / life in the water | swim | Cheap water motion, feeding-rush reuse. |
 | Mudskipper | **the mascot** | amphibious (swim↔crawl) | Proves the amphibious state machine and the half-submerged mask in one animal. |
-| Fire-bellied toad | amphibian | amphibious (swim↔hopper) | Proves hopper reuse across the waterline; forgiving care. |
+| Fire-bellied toad | amphibian | amphibious (swim↔hop) | Proves `hop` reuse across the waterline; forgiving care. |
 | Fire-bellied tadpole | the transformation | swim → amphibious | **Proves the metamorphosis builder-swap** — the pack's headline retention beat. |
-| Land hermit crab | beach life | climber (terrarium reuse) + shellUser | **Proves the shell-swap system**; zero new movement code. |
-| Fiddler crab | beach crowd | crawler (terrarium reuse) | Cheap charm; the group-duck surprise. |
+| Land hermit crab | beach life | climb (terrarium reuse) + shellUser | **Proves the shell-swap system**; zero new movement code. |
+| Fiddler crab | beach crowd | crawl (terrarium reuse) | Cheap charm; the group-duck surprise. |
 | Red-eared slider | the big amphibian | amphibious (swim↔crawl) + basker | The archetypal "swims then hauls out to bask" moment; sells the whole concept. |
 
 **Systems in MVP:** paludarium environment builder (split terrain + waterline
 shader mask + reused water FX), water-quality + dirty-glass meters with derived
 humidity (DECISION §2 option a), the `amphibious` locomotion module with
-swim/crawl/hopper sub-modes, food behaviors `sink`/`hop`/`float`/`static` with
+swim/crawl/hop sub-modes, food behaviors `sink`/`hop`/`float`/`static` with
 cross-boundary handling (DECISION §3 option a), the metamorphosis threshold hook
 (§4.2), the shell-swap item system + Shell drop tool (§5), and turtle predation
 with the parent toggle (DECISION §6 option a+b).

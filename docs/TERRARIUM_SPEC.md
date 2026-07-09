@@ -83,12 +83,12 @@ kept so the schema and rules stay identical.
 
 | Mode | Species | Implementation |
 |---|---|---|
-| **Crawler** (exists) | tortoise, beardie, tarantulas, scorpion, isopods, millipede, roach, beetle, salamander, hermit crab | `Agent.crawler` path verbatim: `_animateCrawler` + `_pickCrawlTarget` + `CRAWL_SPEED`-style per-archetype speeds. Floor surface only. |
-| **Climber** (exists) | crested gecko, pinktoe tarantula, mantises, stick insects, hisser | The snail/star `climber` flag: `_switchSurface()` walking between `SURFACES.floor/front/back/left/right`. This is the terrarium's hero moment — a gecko stuck to the front glass showing its belly. Add `back` bias (cork wall) and branch perching (see below). |
+| **Crawl** (exists) | tortoise, beardie, tarantulas, scorpion, isopods, millipede, roach, beetle, salamander | `Agent.crawler` path verbatim: `_animateCrawler` + `_pickCrawlTarget` + `CRAWL_SPEED`-style per-archetype speeds. Floor surface only. |
+| **Climb** (exists) | crested gecko, pinktoe tarantula, mantises, stick insects, hisser, jumping spider | The snail/star `climber` flag: `_switchSurface()` walking between `SURFACES.floor/front/back/left/right`. This is the terrarium's hero moment — a gecko stuck to the front glass showing its belly. Add `back` bias (cork wall) and branch perching (see below). |
 | **Branch perch** (small new) | arboreal climbers + tree frogs | Branches from `buildDecor` register as extra pseudo-surfaces: a polyline of points; a perched agent lerps along it. Implementation: each branch exposes `{points[], tangents[]}`; treat "branch" as a 6th SURFACES-like entry where `pin` = snap-to-nearest-curve-point. ~60 lines. |
 | **Serpent** (exists, repurposed) | ball python, corn snake | The `eel` archetype in `fishbuilder.js` `PROFILES` already does a travelling-wave body (`aT` vertex wave). Ground snake = eel agent with: `pos.y` pinned to `FLOOR_Y` like a crawler, vertical wave component zeroed, wave axis flipped to lateral (z in local space), `cruise` low (0.6), long rest episodes via `_restLogic` (snakes are furniture 90% of the time — that's accurate AND cheap). Corn snake also gets `climber`-style branch access. |
-| **Hopper** (NEW — spec below) | tree frogs, dart frogs, pacman, fire-bellied toad | New state machine, ~120 lines. |
-| **Swimmer** (exists) | axolotl only | Crossover species: it is literally an aquarium agent (`water:'fresh'`, zone `bottom`) — sold in the terrarium shop tab as a tease, lives in the fish tank. Zero new code. |
+| **Hop** (NEW — spec below) | tree frogs, dart frogs, pacman, tomato frog | New state machine, ~120 lines. |
+| **Swim** (exists) | axolotl only | Crossover species: it is literally an aquarium agent (`water:'fresh'`, zone `bottom`) — sold in the terrarium shop tab as a tease, lives in the fish tank. Zero new code. |
 
 ### Hop locomotion spec (the one new movement mode)
 
@@ -130,7 +130,7 @@ Exact `src/species/freshwater.js` schema. Deltas, applied consistently:
   `zoneY()` in behavior.js maps arboreal→upper third/branches).
 - `kind`: `'herp' | 'bug'` — selects the builder (herpbuilder / extended
   invertbuilder) the way `kind:'invert'` selects `buildInvert` today.
-- New `locomotion`: `'crawler' | 'climber' | 'serpent' | 'hopper' | 'swimmer'`
+- New `locomotion`: `'crawl' | 'climb' | 'serpent' | 'hop' | 'swim'`
   (aquarium infers this from kind/archetype; terrarium declares it).
 - New `humidity`: 0–1 comfort center for the humidity meter.
 - `diet` uses terrarium food ids. Everything else — identical fields,
@@ -142,8 +142,8 @@ export const TERRARIUM_SPECIES = [
     id: 'leopard_gecko', common: 'Leopard Gecko', scientific: 'Eublepharis macularius',
     water: 'terra', kind: 'herp', adultSizeCm: 22, bioload: 3, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'ground', locomotion: 'crawler', humidity: 0.3,
-    speed: 0.6, schooling: 'none', diet: ['cricket', 'worm'], price: 45,
+    tags: ['nocturnal'], zone: 'ground', locomotion: 'crawl', humidity: 0.3,
+    speed: 0.6, schooling: 'solo', diet: ['cricket', 'worm'], price: 45,
     archetype: 'gecko', size: 1.0,
     colors: { base: '#e8c04a', belly: '#f5ead0', fin: '#c89838',
       pattern: 'spots', patternColor: '#3a2a14', patternScale: 1.2, iridescence: 0.1 },
@@ -159,8 +159,8 @@ export const TERRARIUM_SPECIES = [
     id: 'crested_gecko', common: 'Crested Gecko', scientific: 'Correlophus ciliatus',
     water: 'terra', kind: 'herp', adultSizeCm: 20, bioload: 3, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'arboreal', locomotion: 'climber', humidity: 0.7,
-    speed: 0.8, schooling: 'none', diet: ['fruit', 'cricket'], price: 50,
+    tags: ['nocturnal'], zone: 'arboreal', locomotion: 'climb', humidity: 0.7,
+    speed: 0.8, schooling: 'solo', diet: ['fruit', 'cricket'], price: 50,
     archetype: 'gecko', size: 0.95, shape: { height: 1.0, finFlow: 1.0 },
     colors: { base: '#c4924a', belly: '#e0c898', fin: '#8a5a2a',
       pattern: 'patches', patternColor: '#6b4520', patternScale: 1.0, iridescence: 0.1 },
@@ -177,7 +177,7 @@ export const TERRARIUM_SPECIES = [
     water: 'terra', kind: 'herp', adultSizeCm: 120, bioload: 10, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
     tags: ['nocturnal', 'soloOnly'], zone: 'ground', locomotion: 'serpent', humidity: 0.55,
-    speed: 0.4, schooling: 'none', diet: ['mouse'], price: 90,
+    speed: 0.4, schooling: 'solo', diet: ['mouse'], price: 90,
     archetype: 'snake', size: 1.4,
     colors: { base: '#6b4e2a', belly: '#d8cba8', fin: '#4a3418',
       pattern: 'patches', patternColor: '#d8b464', patternScale: 1.4, iridescence: 0.25 },
@@ -194,7 +194,7 @@ export const TERRARIUM_SPECIES = [
     water: 'terra', kind: 'herp', adultSizeCm: 120, bioload: 8, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
     tags: ['soloOnly'], zone: 'ground', locomotion: 'serpent', humidity: 0.45,
-    speed: 0.7, schooling: 'none', diet: ['mouse'], price: 60,
+    speed: 0.7, schooling: 'solo', diet: ['mouse'], price: 60,
     archetype: 'snake', size: 1.2,
     colors: { base: '#d8703a', belly: '#e8dcc0', fin: '#b03020',
       pattern: 'patches', patternColor: '#b03020', patternScale: 1.6, iridescence: 0.2 },
@@ -210,8 +210,8 @@ export const TERRARIUM_SPECIES = [
     id: 'bearded_dragon', common: 'Bearded Dragon', scientific: 'Pogona vitticeps',
     water: 'terra', kind: 'herp', adultSizeCm: 50, bioload: 8, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['soloOnly', 'basker'], zone: 'ground', locomotion: 'crawler', humidity: 0.25,
-    speed: 0.8, schooling: 'none', diet: ['cricket', 'veggie', 'worm'], price: 70,
+    tags: ['soloOnly', 'basker'], zone: 'ground', locomotion: 'crawl', humidity: 0.25,
+    speed: 0.8, schooling: 'solo', diet: ['cricket', 'veggie', 'worm'], price: 70,
     archetype: 'lizard', size: 1.2,
     colors: { base: '#c8a05a', belly: '#e8d8b8', fin: '#a87838',
       pattern: 'stripesH', patternColor: '#8a6030', patternScale: 1.2, iridescence: 0.05 },
@@ -221,14 +221,14 @@ export const TERRARIUM_SPECIES = [
       'When excited or grumpy, its spiky chin "beard" puffs up and turns black.',
       'It has a tiny third eye on top of its head that senses light and shadows from above.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'veiled_chameleon', common: 'Veiled Chameleon', scientific: 'Chamaeleo calyptratus',
     water: 'terra', kind: 'herp', adultSizeCm: 45, bioload: 6, minSchool: 1,
     temperament: 'shy', predator: false, finNipper: false, longFins: false,
-    tags: ['soloOnly', 'expertDiet'], zone: 'arboreal', locomotion: 'climber', humidity: 0.6,
-    speed: 0.25, schooling: 'none', diet: ['cricket', 'worm'], price: 110,
+    tags: ['soloOnly', 'expertDiet'], zone: 'arboreal', locomotion: 'climb', humidity: 0.6,
+    speed: 0.25, schooling: 'solo', diet: ['cricket', 'worm'], price: 110,
     archetype: 'chameleon', size: 1.1,
     colors: { base: '#5aa832', belly: '#a8d878', fin: '#3a7820',
       pattern: 'stripesV', patternColor: '#d8e04a', patternScale: 1.3, iridescence: 0.15 },
@@ -238,13 +238,13 @@ export const TERRARIUM_SPECIES = [
       'Its sticky tongue shoots out longer than its whole body in a fraction of a second.',
       'It changes color to show its mood — bright when happy, dark stripes when annoyed.'
     ],
-    care: 'Expert'
+    care: 'Hard'
   },
   {
     id: 'whites_tree_frog', common: "White's Tree Frog", scientific: 'Litoria caerulea',
     water: 'terra', kind: 'herp', adultSizeCm: 10, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'arboreal', locomotion: 'hopper', humidity: 0.65,
+    tags: ['nocturnal'], zone: 'arboreal', locomotion: 'hop', humidity: 0.65,
     speed: 0.6, schooling: 'loose', diet: ['cricket', 'worm'], price: 35,
     archetype: 'frog', size: 1.0,
     colors: { base: '#6ab08a', belly: '#e8e0c8', fin: '#4a8a68',
@@ -261,7 +261,7 @@ export const TERRARIUM_SPECIES = [
     id: 'red_eyed_tree_frog', common: 'Red-Eyed Tree Frog', scientific: 'Agalychnis callidryas',
     water: 'terra', kind: 'herp', adultSizeCm: 7, bioload: 2, minSchool: 2,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'arboreal', locomotion: 'hopper', humidity: 0.85,
+    tags: ['nocturnal'], zone: 'arboreal', locomotion: 'hop', humidity: 0.85,
     speed: 0.8, schooling: 'loose', diet: ['cricket', 'fruitfly'], price: 45,
     archetype: 'frog', size: 0.85,
     colors: { base: '#4ab83a', belly: '#e8f0d8', fin: '#e87020',
@@ -272,13 +272,13 @@ export const TERRARIUM_SPECIES = [
       'If a predator gets close, it flashes its red eyes and orange feet to startle it and escape.',
       'Mom lays eggs on leaves hanging over ponds, so hatching tadpoles drop straight into the water.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'azureus_dart_frog', common: 'Blue Poison Dart Frog', scientific: "Dendrobates tinctorius 'Azureus'",
     water: 'terra', kind: 'herp', adultSizeCm: 4.5, bioload: 1, minSchool: 2,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'hopper', humidity: 0.9,
+    tags: [], zone: 'ground', locomotion: 'hop', humidity: 0.9,
     speed: 0.9, schooling: 'loose', diet: ['fruitfly'], price: 55,
     archetype: 'frog', size: 0.6,
     colors: { base: '#2858d0', belly: '#4870d8', fin: '#1a3a90',
@@ -289,13 +289,13 @@ export const TERRARIUM_SPECIES = [
       'Every dart frog has its own pattern of black spots, unique like your fingerprint.',
       'Dart frog parents give tadpoles piggyback rides to little pools of water inside plants.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'strawberry_dart_frog', common: 'Strawberry Dart Frog', scientific: 'Oophaga pumilio',
     water: 'terra', kind: 'herp', adultSizeCm: 2.5, bioload: 1, minSchool: 2,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['expertDiet'], zone: 'ground', locomotion: 'hopper', humidity: 0.9,
+    tags: ['expertDiet'], zone: 'ground', locomotion: 'hop', humidity: 0.9,
     speed: 0.9, schooling: 'loose', diet: ['fruitfly'], price: 65,
     archetype: 'frog', size: 0.45,
     colors: { base: '#d82820', belly: '#e85040', fin: '#3048a0',
@@ -306,14 +306,14 @@ export const TERRARIUM_SPECIES = [
       'It is smaller than your thumbnail as an adult, but its bright color says "notice me!"',
       'The mother carries each tadpole up a tree to its own tiny water pool inside a plant, and brings it food.'
     ],
-    care: 'Expert'
+    care: 'Hard'
   },
   {
     id: 'pacman_frog', common: 'Pacman Frog', scientific: 'Ceratophrys ornata',
     water: 'terra', kind: 'herp', adultSizeCm: 12, bioload: 3, minSchool: 1,
     temperament: 'aggressive', predator: true, finNipper: false, longFins: false,
-    tags: ['soloOnly'], zone: 'burrow', locomotion: 'hopper', humidity: 0.75,
-    speed: 0.3, schooling: 'none', diet: ['cricket', 'worm'], price: 40,
+    tags: ['soloOnly'], zone: 'burrow', locomotion: 'hop', humidity: 0.75,
+    speed: 0.3, schooling: 'solo', diet: ['cricket', 'worm'], price: 40,
     archetype: 'frog', size: 1.15, shape: { height: 1.3, finFlow: 1.0 },
     colors: { base: '#5a9838', belly: '#e0d8b0', fin: '#8a5828',
       pattern: 'patches', patternColor: '#3a6820', patternScale: 1.5, iridescence: 0.05 },
@@ -325,20 +325,21 @@ export const TERRARIUM_SPECIES = [
     ],
     care: 'Easy'
   },
+  // fire_bellied_toad moved to PALUDARIUM_SPEC (semi-aquatic — it belongs at a waterline).
   {
-    id: 'fire_bellied_toad', common: 'Fire-Bellied Toad', scientific: 'Bombina orientalis',
-    water: 'terra', kind: 'herp', adultSizeCm: 5, bioload: 1, minSchool: 3,
+    id: 'tomato_frog', common: 'Tomato Frog', scientific: 'Dyscophus antongilii',
+    water: 'terra', kind: 'herp', adultSizeCm: 10, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'hopper', humidity: 0.8,
-    speed: 0.8, schooling: 'loose', diet: ['cricket', 'fruitfly'], price: 25,
-    archetype: 'frog', size: 0.6,
-    colors: { base: '#4a9838', belly: '#e83818', fin: '#2a6820',
-      pattern: 'spots', patternColor: '#1a3010', patternScale: 1.3, iridescence: 0.1 },
-    habitat: 'Ponds and slow streams of Korea, northeastern China, and eastern Russia.',
+    tags: ['nocturnal'], zone: 'burrow', locomotion: 'hop', humidity: 0.7,
+    speed: 0.4, schooling: 'solo', diet: ['cricket', 'worm'], price: 35,
+    archetype: 'frog', size: 1.0, shape: { height: 1.25, finFlow: 1.0 },
+    colors: { base: '#d63a1e', belly: '#e6d4bc', fin: '#a82a12',
+      pattern: 'none', patternColor: '#ffffff', patternScale: 1.0, iridescence: 0.05 },
+    habitat: 'Swampy forest floors and still ponds of northeastern Madagascar.',
     facts: [
-      'When scared, it arches its back to flash its fire-orange belly: "warning — I taste bad!"',
-      'It spends as much time paddling in shallow water as hopping on land.',
-      'Its call is not a croak but a soft, musical "boop... boop" like a tiny bell.'
+      'It is named after a tomato because a grown-up female turns round, ripe, and bright reddish-orange.',
+      'If something bites it, its skin oozes a sticky white glue that gums up the attacker\'s mouth until it lets go.',
+      'It hides buried in leaves and soil with only its eyes poking out, then gulps down any bug that walks past.'
     ],
     care: 'Easy'
   },
@@ -347,8 +348,8 @@ export const TERRARIUM_SPECIES = [
     water: 'fresh',  // CROSSOVER: fully aquatic — lives in the AQUARIUM, sold from the terrarium tab
     kind: 'herp', adultSizeCm: 25, bioload: 8, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
-    tags: ['coldwater', 'soloOnly'], zone: 'bottom', locomotion: 'swimmer', humidity: 1.0,
-    speed: 0.5, schooling: 'none', diet: ['frozen', 'pellet'], price: 80,
+    tags: ['coldwater', 'soloOnly'], zone: 'bottom', locomotion: 'swim', humidity: 1.0,
+    speed: 0.5, schooling: 'solo', diet: ['frozen', 'pellet'], price: 80,
     archetype: 'salamander', size: 1.1,
     colors: { base: '#f0c8c8', belly: '#f8e0e0', fin: '#d05868',
       pattern: 'none', patternColor: '#ffffff', patternScale: 1.0, iridescence: 0.15 },
@@ -358,14 +359,14 @@ export const TERRARIUM_SPECIES = [
       'It never grows up! It keeps its feathery baby gills its whole life and stays underwater.',
       'Its mouth curves so it always looks like it is smiling at you.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'tiger_salamander', common: 'Tiger Salamander', scientific: 'Ambystoma tigrinum',
     water: 'terra', kind: 'herp', adultSizeCm: 30, bioload: 4, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'burrow', locomotion: 'crawler', humidity: 0.7,
-    speed: 0.5, schooling: 'none', diet: ['worm', 'cricket'], price: 45,
+    tags: ['nocturnal'], zone: 'burrow', locomotion: 'crawl', humidity: 0.7,
+    speed: 0.5, schooling: 'solo', diet: ['worm', 'cricket'], price: 45,
     archetype: 'salamander', size: 1.0,
     colors: { base: '#2a2a20', belly: '#5a5a48', fin: '#d8c838',
       pattern: 'patches', patternColor: '#d8c838', patternScale: 1.5, iridescence: 0.1 },
@@ -381,8 +382,8 @@ export const TERRARIUM_SPECIES = [
     id: 'redknee_tarantula', common: 'Mexican Red-Knee Tarantula', scientific: 'Brachypelma hamorii',
     water: 'terra', kind: 'bug', adultSizeCm: 14, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
-    tags: ['nocturnal', 'soloOnly'], zone: 'ground', locomotion: 'crawler', humidity: 0.5,
-    speed: 0.5, schooling: 'none', diet: ['cricket', 'worm'], price: 75,
+    tags: ['nocturnal', 'soloOnly'], zone: 'ground', locomotion: 'crawl', humidity: 0.5,
+    speed: 0.5, schooling: 'solo', diet: ['cricket', 'worm'], price: 75,
     archetype: 'tarantula', size: 1.0, edible: false,
     colors: { base: '#1a1a1a', belly: '#2a2020', fin: '#e86820',
       pattern: 'stripesH', patternColor: '#e86820', patternScale: 1.2, iridescence: 0.1 },
@@ -398,8 +399,8 @@ export const TERRARIUM_SPECIES = [
     id: 'pinktoe_tarantula', common: 'Pink-Toe Tarantula', scientific: 'Avicularia avicularia',
     water: 'terra', kind: 'bug', adultSizeCm: 12, bioload: 2, minSchool: 1,
     temperament: 'shy', predator: true, finNipper: false, longFins: false,
-    tags: ['nocturnal', 'soloOnly'], zone: 'arboreal', locomotion: 'climber', humidity: 0.75,
-    speed: 0.8, schooling: 'none', diet: ['cricket'], price: 60,
+    tags: ['nocturnal', 'soloOnly'], zone: 'arboreal', locomotion: 'climb', humidity: 0.75,
+    speed: 0.8, schooling: 'solo', diet: ['cricket'], price: 60,
     archetype: 'tarantula', size: 0.9, edible: false,
     colors: { base: '#22222e', belly: '#33333e', fin: '#e090a8',
       pattern: 'gradientTail', patternColor: '#e090a8', patternScale: 1.0, iridescence: 0.35 },
@@ -409,14 +410,14 @@ export const TERRARIUM_SPECIES = [
       'It builds a silky tube-tent high in the leaves and hides inside during the day.',
       'Instead of running away on the ground, it can leap from branch to branch.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'curlyhair_tarantula', common: 'Curly Hair Tarantula', scientific: 'Tliltocatl albopilosus',
     water: 'terra', kind: 'bug', adultSizeCm: 13, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
-    tags: ['nocturnal', 'soloOnly'], zone: 'ground', locomotion: 'crawler', humidity: 0.6,
-    speed: 0.45, schooling: 'none', diet: ['cricket', 'worm'], price: 50,
+    tags: ['nocturnal', 'soloOnly'], zone: 'ground', locomotion: 'crawl', humidity: 0.6,
+    speed: 0.45, schooling: 'solo', diet: ['cricket', 'worm'], price: 50,
     archetype: 'tarantula', size: 0.95, edible: false,
     colors: { base: '#3a2e22', belly: '#4a3c2e', fin: '#c8a058',
       pattern: 'none', patternColor: '#c8a058', patternScale: 1.0, iridescence: 0.2 },
@@ -432,8 +433,8 @@ export const TERRARIUM_SPECIES = [
     id: 'emperor_scorpion', common: 'Emperor Scorpion', scientific: 'Pandinus imperator',
     water: 'terra', kind: 'bug', adultSizeCm: 20, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
-    tags: ['nocturnal', 'soloOnly'], zone: 'burrow', locomotion: 'crawler', humidity: 0.75,
-    speed: 0.5, schooling: 'none', diet: ['cricket', 'worm'], price: 65,
+    tags: ['nocturnal', 'soloOnly'], zone: 'burrow', locomotion: 'crawl', humidity: 0.75,
+    speed: 0.5, schooling: 'solo', diet: ['cricket', 'worm'], price: 65,
     archetype: 'scorpion', size: 1.1, edible: false,
     colors: { base: '#101820', belly: '#182028', fin: '#284858',
       pattern: 'none', patternColor: '#284858', patternScale: 1.0, iridescence: 0.6 },
@@ -443,14 +444,14 @@ export const TERRARIUM_SPECIES = [
       'It would rather pinch with its big claws than sting; its sting is milder than a bee\'s.',
       'A scorpion mom carries all her babies riding on her back like a bus.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'orchid_mantis', common: 'Orchid Mantis', scientific: 'Hymenopus coronatus',
     water: 'terra', kind: 'bug', adultSizeCm: 7, bioload: 1, minSchool: 1,
     temperament: 'aggressive', predator: true, finNipper: false, longFins: false,
-    tags: ['soloOnly'], zone: 'arboreal', locomotion: 'climber', humidity: 0.7,
-    speed: 0.6, schooling: 'none', diet: ['fruitfly', 'cricket'], price: 55,
+    tags: ['soloOnly'], zone: 'arboreal', locomotion: 'climb', humidity: 0.7,
+    speed: 0.6, schooling: 'solo', diet: ['fruitfly', 'cricket'], price: 55,
     archetype: 'mantis', size: 0.7, edible: true,
     colors: { base: '#f0d8e8', belly: '#f8ecf4', fin: '#e070a0',
       pattern: 'gradientTail', patternColor: '#e070a0', patternScale: 1.0, iridescence: 0.2 },
@@ -460,13 +461,13 @@ export const TERRARIUM_SPECIES = [
       'Instead of hiding, it pretends to be a flower so bees fly right to it.',
       'It sways gently side to side, like a blossom bobbing in the breeze.'
     ],
-    care: 'Expert'
+    care: 'Hard'
   },
   {
     id: 'ghost_mantis', common: 'Ghost Mantis', scientific: 'Phyllocrania paradoxa',
     water: 'terra', kind: 'bug', adultSizeCm: 5, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
-    tags: [], zone: 'arboreal', locomotion: 'climber', humidity: 0.65,
+    tags: [], zone: 'arboreal', locomotion: 'climb', humidity: 0.65,
     speed: 0.5, schooling: 'loose', diet: ['fruitfly'], price: 40,
     archetype: 'mantis', size: 0.55, edible: true,
     colors: { base: '#6b4e30', belly: '#7a5c3a', fin: '#4a3520',
@@ -477,14 +478,14 @@ export const TERRARIUM_SPECIES = [
       'When the wind blows, it rocks back and forth to move exactly like the leaves around it.',
       'Unlike most mantises, ghost mantises are calm enough to live in small groups.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'chinese_mantis', common: 'Chinese Mantis', scientific: 'Tenodera sinensis',
     water: 'terra', kind: 'bug', adultSizeCm: 10, bioload: 1, minSchool: 1,
     temperament: 'aggressive', predator: true, finNipper: false, longFins: false,
-    tags: ['soloOnly'], zone: 'arboreal', locomotion: 'climber', humidity: 0.5,
-    speed: 0.7, schooling: 'none', diet: ['cricket', 'fruitfly'], price: 25,
+    tags: ['soloOnly'], zone: 'arboreal', locomotion: 'climb', humidity: 0.5,
+    speed: 0.7, schooling: 'solo', diet: ['cricket', 'fruitfly'], price: 25,
     archetype: 'mantis', size: 0.85, edible: true,
     colors: { base: '#7a9040', belly: '#a8b868', fin: '#5a7028',
       pattern: 'stripesH', patternColor: '#b8a858', patternScale: 1.0, iridescence: 0.1 },
@@ -500,7 +501,7 @@ export const TERRARIUM_SPECIES = [
     id: 'indian_stick_insect', common: 'Indian Stick Insect', scientific: 'Carausius morosus',
     water: 'terra', kind: 'bug', adultSizeCm: 10, bioload: 1, minSchool: 3,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'arboreal', locomotion: 'climber', humidity: 0.6,
+    tags: [], zone: 'arboreal', locomotion: 'climb', humidity: 0.6,
     speed: 0.3, schooling: 'loose', diet: ['veggie'], price: 15,
     archetype: 'stick', size: 0.8, edible: true,
     colors: { base: '#6a8a3a', belly: '#7a9a48', fin: '#4a6828',
@@ -517,7 +518,7 @@ export const TERRARIUM_SPECIES = [
     id: 'giant_prickly_stick', common: 'Giant Prickly Stick Insect', scientific: 'Extatosoma tiaratum',
     water: 'terra', kind: 'bug', adultSizeCm: 15, bioload: 1, minSchool: 2,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'arboreal', locomotion: 'climber', humidity: 0.6,
+    tags: [], zone: 'arboreal', locomotion: 'climb', humidity: 0.6,
     speed: 0.3, schooling: 'loose', diet: ['veggie'], price: 35,
     archetype: 'stick', size: 1.1, edible: true,
     colors: { base: '#b09050', belly: '#c8a868', fin: '#8a6b38',
@@ -528,13 +529,13 @@ export const TERRARIUM_SPECIES = [
       'Its newly hatched babies are copycats of ants, running fast with curled-up bodies.',
       'Its eggs look like seeds, so ants carry them home and keep them safe underground until they hatch.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'hissing_cockroach', common: 'Madagascar Hissing Cockroach', scientific: 'Gromphadorhina portentosa',
     water: 'terra', kind: 'bug', adultSizeCm: 8, bioload: 1, minSchool: 3,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'ground', locomotion: 'climber', humidity: 0.6,
+    tags: ['nocturnal'], zone: 'ground', locomotion: 'climb', humidity: 0.6,
     speed: 0.7, schooling: 'loose', diet: ['fruit', 'veggie'], price: 12,
     archetype: 'roach', size: 0.8, edible: true,
     colors: { base: '#5a2e18', belly: '#3a1e10', fin: '#8a4a24',
@@ -551,8 +552,8 @@ export const TERRARIUM_SPECIES = [
     id: 'giant_millipede', common: 'Giant African Millipede', scientific: 'Archispirostreptus gigas',
     water: 'terra', kind: 'bug', adultSizeCm: 30, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'ground', locomotion: 'crawler', humidity: 0.8,
-    speed: 0.25, schooling: 'none', diet: ['veggie', 'fruit'], price: 30,
+    tags: ['nocturnal'], zone: 'ground', locomotion: 'crawl', humidity: 0.8,
+    speed: 0.25, schooling: 'solo', diet: ['veggie', 'fruit'], price: 30,
     archetype: 'millipede', size: 1.2, edible: false,
     colors: { base: '#201a14', belly: '#2a221a', fin: '#6a3820',
       pattern: 'stripesV', patternColor: '#302620', patternScale: 2.0, iridescence: 0.2 },
@@ -568,7 +569,7 @@ export const TERRARIUM_SPECIES = [
     id: 'rubber_ducky_isopod', common: 'Rubber Ducky Isopod', scientific: "Cubaris sp. 'Rubber Ducky'",
     water: 'terra', kind: 'bug', adultSizeCm: 1.5, bioload: 1, minSchool: 5,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'crawler', humidity: 0.85,
+    tags: [], zone: 'ground', locomotion: 'crawl', humidity: 0.85,
     speed: 0.3, schooling: 'loose', diet: ['veggie', 'fruit'], price: 20,
     archetype: 'isopod', size: 0.35, edible: false, cleans: true,
     colors: { base: '#8a8a88', belly: '#a8a8a0', fin: '#e8c040',
@@ -579,13 +580,13 @@ export const TERRARIUM_SPECIES = [
       'Isopods are the cleanup crew: they eat old leaves and droppings and keep the tank tidy.',
       'It is not an insect at all — it is a tiny land crustacean, cousin to crabs and shrimp.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'dairy_cow_isopod', common: 'Dairy Cow Isopod', scientific: "Porcellio laevis 'Dairy Cow'",
     water: 'terra', kind: 'bug', adultSizeCm: 2, bioload: 1, minSchool: 5,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'crawler', humidity: 0.7,
+    tags: [], zone: 'ground', locomotion: 'crawl', humidity: 0.7,
     speed: 0.5, schooling: 'loose', diet: ['veggie', 'fruit'], price: 8,
     archetype: 'isopod', size: 0.4, edible: true, cleans: true,
     colors: { base: '#e8e8e0', belly: '#f0f0e8', fin: '#202020',
@@ -602,7 +603,7 @@ export const TERRARIUM_SPECIES = [
     id: 'blue_death_feigning_beetle', common: 'Blue Death-Feigning Beetle', scientific: 'Asbolus verrucosus',
     water: 'terra', kind: 'bug', adultSizeCm: 2, bioload: 1, minSchool: 3,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'ground', locomotion: 'crawler', humidity: 0.15,
+    tags: [], zone: 'ground', locomotion: 'crawl', humidity: 0.15,
     speed: 0.5, schooling: 'loose', diet: ['veggie', 'worm'], price: 15,
     archetype: 'beetle', size: 0.4, edible: false,
     colors: { base: '#8aa8b8', belly: '#6a8898', fin: '#48606c',
@@ -615,20 +616,21 @@ export const TERRARIUM_SPECIES = [
     ],
     care: 'Easy'
   },
+  // hermit_crab moved to PALUDARIUM_SPEC (land hermit crab — needs a waterline / seawater dish).
   {
-    id: 'hermit_crab', common: 'Caribbean Hermit Crab', scientific: 'Coenobita clypeatus',
-    water: 'terra', kind: 'bug', adultSizeCm: 8, bioload: 2, minSchool: 2,
-    temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['nocturnal'], zone: 'ground', locomotion: 'climber', humidity: 0.75,
-    speed: 0.6, schooling: 'loose', diet: ['fruit', 'veggie'], price: 20,
-    archetype: 'crab', size: 0.9, edible: false,
-    colors: { base: '#b06a3a', belly: '#c88850', fin: '#c8b090',
-      pattern: 'none', patternColor: '#ffffff', patternScale: 1.0, iridescence: 0.1 },
-    habitat: 'Beaches and coastal forests of the Caribbean islands.',
+    id: 'jumping_spider', common: 'Regal Jumping Spider', scientific: 'Phidippus regius',
+    water: 'terra', kind: 'bug', adultSizeCm: 1.8, bioload: 1, minSchool: 1,
+    temperament: 'peaceful', predator: true, finNipper: false, longFins: false,
+    tags: ['soloOnly'], zone: 'arboreal', locomotion: 'climb', humidity: 0.55,
+    speed: 0.7, schooling: 'solo', diet: ['fruitfly', 'cricket'], price: 25,
+    archetype: 'tarantula', size: 0.3, edible: true,
+    colors: { base: '#161616', belly: '#242424', fin: '#3ba88f',
+      pattern: 'spots', patternColor: '#f0f0f0', patternScale: 1.1, iridescence: 0.4 },
+    habitat: 'Sunny tree trunks, walls, and palmetto scrub of the southeastern United States.',
     facts: [
-      'It wears an empty seashell as its house and moves to a bigger one as it grows.',
-      'Hermit crabs sometimes line up biggest-to-smallest so everyone can trade shells at once!',
-      'Despite living on land, it carries a little seawater in its shell to keep its gills damp.'
+      'Its two huge front eyes give it the sharpest eyesight of almost any bug — it can spot and watch you from across the room.',
+      'Before it leaps, it glues down a silk safety line, so if it misses it just dangles and climbs back up like a bungee cord.',
+      'A male dances to say hello, waving his colorful front legs and drumming in a tiny disco routine.'
     ],
     care: 'Easy'
   },
@@ -636,8 +638,8 @@ export const TERRARIUM_SPECIES = [
     id: 'russian_tortoise', common: 'Russian Tortoise', scientific: 'Testudo horsfieldii',
     water: 'terra', kind: 'herp', adultSizeCm: 20, bioload: 8, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['soloOnly', 'basker'], zone: 'ground', locomotion: 'crawler', humidity: 0.3,
-    speed: 0.3, schooling: 'none', diet: ['veggie'], price: 95,
+    tags: ['soloOnly', 'basker'], zone: 'ground', locomotion: 'crawl', humidity: 0.3,
+    speed: 0.3, schooling: 'solo', diet: ['veggie'], price: 95,
     archetype: 'tortoise', size: 1.1,
     colors: { base: '#7a6a3a', belly: '#b0985a', fin: '#4a3e20',
       pattern: 'patches', patternColor: '#3a3018', patternScale: 1.6, iridescence: 0.0 },
@@ -647,7 +649,7 @@ export const TERRARIUM_SPECIES = [
       'It digs long burrows and can nap underground for months to skip the coldest and hottest weather.',
       'With good care it can live 40 years or more — it might outlive your goldfish by decades.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
 ];
 ```
@@ -679,14 +681,14 @@ export const TERRARIUM_SPECIES = [
 
 | Species | Locomotion | Why |
 |---|---|---|
-| Leopard Gecko | crawler (exists) | THE first pet reptile; nocturnal showpiece |
-| Crested Gecko | climber (exists) | glass-climbing wow moment |
+| Leopard Gecko | crawl (exists) | THE first pet reptile; nocturnal showpiece |
+| Crested Gecko | climb (exists) | glass-climbing wow moment |
 | Corn Snake | serpent (eel reuse) | snake with no feeding controversy blocker if mice deferred — can eat `worm` in MVP |
-| White's Tree Frog | hopper (new) | proves the hop system; forgiving care |
-| Blue Dart Frog | hopper | color + the not-toxic fact; fruitfly food |
-| Curly Hair Tarantula | crawler | the can't-have pet, zero new movement code |
-| Chinese Mantis | climber | predator drama, cheap |
-| Dairy Cow Isopod | crawler | cleanup-crew mechanic (`cleans: true`), cheap starter |
+| White's Tree Frog | hop (new) | proves the hop system; forgiving care |
+| Blue Dart Frog | hop | color + the not-toxic fact; fruitfly food |
+| Curly Hair Tarantula | crawl | the can't-have pet, zero new movement code |
+| Chinese Mantis | climb | predator drama, cheap |
+| Dairy Cow Isopod | crawl | cleanup-crew mechanic (`cleans: true`), cheap starter |
 
 Systems in MVP: terrarium environment builder, humidity + dirty-glass meters
 (temperature meter deferred — lamp is visual only), hop locomotion, foods

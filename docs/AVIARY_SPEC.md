@@ -8,7 +8,8 @@ problem no earlier pack has: **landing**.
 
 Everything here maps to an existing module the way TERRARIUM_SPEC maps to
 `tank.js`. The genuinely new code is: one locomotion mode (`flight`, built as
-the promotion of swim boids), a hover sub-mode (`hover`), the birdsong voice
+the promotion of swim boids) with a `hover` variant flag (not a separate
+module), the birdsong voice
 bank on the existing synth, a folding-wing geometry rig on the fishbuilder
 lofted-body tech, and one environment builder. Flocking, predator/prey,
 day/night, care decay, rules, and coins are reused verbatim.
@@ -65,15 +66,10 @@ budgie's face. Tap-to-follow (`cam.follow`) becomes far more valuable here — a
 bird crossing a 220 cm cage is the money shot; following it is the aviary's
 signature camera moment, no new code.
 
-> **DECISION FOR JOHN — enclosure style (pick one):**
-> - **(a) Walk-in flight aviary (recommended):** tall mesh room, the kid is
->   "inside." Best sells "the parrot you can't have," maximizes the flight
->   showpiece, justifies the H=240 build.
-> - **(b) Big parrot cage:** bar-cage look, cozier, smaller (H≈140), cheaper
->   camera story, reads as "a pet in a cage" (slightly less magical, arguably
->   more honest to how a kid would actually keep one bird).
-> - **(c) Both as a theme toggle** (like fresh/salt): "Cage" vs "Flight" subtype
->   — reuses the subtype switch, but doubles the environment art.
+> **DECIDED (John, 2026-07-09): walk-in flight aviary.** Tall mesh room the
+> kid is "inside" — best sells "the parrot you can't have," maximizes the
+> flight showpiece, and justifies the H=240 build. (Writer's recommendation
+> adopted.)
 
 ### Element mapping
 
@@ -173,14 +169,16 @@ things water gives for free that air does not: **neutral buoyancy** (fish don't
 fall) and **infinite braking** (water drag stops a fish instantly). Flight must
 add gravity and must *earn* every stop by landing. That's the whole design.
 
-Register `flight` (and `hover`) in the locomotion registry (ENGINE_SPLIT §3).
+Register `flight` in the locomotion registry (ENGINE_SPLIT §3) — the only new
+registry entry. `hover` is a **variant flag on `flight`** (`flight: 'hover'`
+in the species schema), not a module.
 `Swarm.update` keeps its shared pre/post (growth scale, eatCooldown, startle,
 sim queries, orientation); the flight module owns steering + the state machine.
 
 ### Flight state machine
 
 States: `perched → takeoff → cruise → approach → land → perched`
-(with `hover` as a cruise sub-mode for hummingbirds, §Hover). Real numbers,
+(with `hover` as a cruise variant for hummingbirds, §Hover). Real numbers,
 in the style of TERRARIUM_SPEC's hop spec. World units = cm, `G` tuned punchy
 like the hop spec (reads better at cage scale than real 981 cm/s²).
 
@@ -270,10 +268,10 @@ faster and fall, so bounds need two extra honesties:
    `behavior.js`) — a bird gripping the mesh is literally a gecko on glass.
    Flag as post-MVP; the wall-cling is free reuse but not load-bearing.
 
-### Hover sub-mode (hummingbird)
+### Hover variant flag (hummingbird)
 
 Hummingbirds break the "must keep moving or stall" rule — they hover on brute
-wingbeat. Spec `hover` as a **cruise variant**, not a whole new mode:
+wingbeat. `hover` is a **cruise variant flag on `flight`**, not a mode:
 - Gravity is fully cancelled by continuous lift (`vel.y` damped toward 0 near a
   target flower/feeder); the airspeed floor is disabled.
 - Movement is darting: short, fast, straight dashes between hover points with
@@ -281,15 +279,11 @@ wingbeat. Spec `hover` as a **cruise variant**, not a whole new mode:
   with `brakeDist` tiny.
 - Wing animation is a blur (see §7) — the visual, not the physics, sells it.
 
-> **DECISION FOR JOHN — does hummingbird need its own locomotion sub-mode?**
-> **Recommendation: yes, but cheap** — `hover` is ~30 lines layered on `flight`
-> (cancel gravity + disable stall + dart steering), not a third mode. Options:
-> - **(a) Ship hover as a `flight` variant** (recommended): one flag
->   `spec.flight === 'hover'` toggles the two rule-changes above.
-> - **(b) Defer hummingbird to a v2 content drop** — flagship flight roster
->   without it; add hover later. Lowers MVP risk (§8 already cuts it).
-> - **(c) Full separate `hover` module** — cleanest code, most work; only worth
->   it if a future pack (e.g. sunbirds, or a bee in Bee Hive) reuses it.
+> **DECIDED (John, 2026-07-09): ship `hover` as a cheap `flight` variant.**
+> One flag (`spec.flight === 'hover'`) toggles the two rule-changes above —
+> ~30 lines layered on `flight`, no third locomotion module, matching the
+> canonical registry (hover is a variant flag, not a mode). (Writer's
+> recommendation adopted.)
 
 ---
 
@@ -364,13 +358,9 @@ the app during that window:
 - **Cost:** near zero — it's a rate multiplier + phase-stagger on recipes that
   already exist. No assets, no new DSP.
 
-> **DECISION FOR JOHN — dawn chorus intrusiveness:**
-> - **(a) On by default, gentle** (recommended): swells softly, respects the
->   master mute, never louder than normal chatter × ~1.6.
-> - **(b) Off by default, opt-in "Dawn Chorus" toggle** — safest for a parent
->   who hands the phone over at breakfast; discoverable as a delight.
-> - **(c) Visual-only dawn "everybody's singing" cue** if sound is muted (birds
->   animate open-beak) so muted players still get the moment.
+> **DECIDED (John, 2026-07-09): on by default, gentle.** Swells softly,
+> respects the master mute, never louder than normal chatter × ~1.6 — the
+> signature moment should just happen. (Writer's recommendation adopted.)
 
 ### Parrot / budgie MIMICRY (scope call)
 
@@ -385,16 +375,11 @@ taste-and-scope decision.** What a synth can realistically "learn":
 | **(3) Scripted phrase unlocks** | The kid "teaches" set phrases (a wolf-whistle, "hello") unlocked by care milestones; parrot plays them via `_whistle`. Feels like teaching, fully authored. | Med: content + unlock plumbing | None |
 | **(4) Real mic input mimicry** | Mic captures the kid's whistle/voice; bird plays it back (pitch-tracked or raw). The "wow." | High + **privacy-sensitive**: mic permission on a kids' app, recording, storage. | **High** — cuts against "safe for a 6-year-old to own, no accounts, no dark patterns." |
 
-> **DECISION FOR JOHN — mimicry scope (RECOMMENDATION: ship (1)+(2), defer (3),
-> reject (4) for the kids'-privacy line):**
-> - **(1) Tap-melody echo** — cheapest, delightful, zero privacy cost. The core.
-> - **(2) In-aviary song mimicry** — emergent, "my birds taught each other,"
->   free reuse of recipes. Strong pairing with (1).
-> - **(3) Scripted phrase unlocks** — good retention layer, do it if there's
->   time; it's the "teach your parrot to say hello" fantasy done safely.
-> - **(4) Mic mimicry** — **flag against**: violates the offline/no-permissions/
->   safe-for-a-6-year-old constraints. If ever wanted, it must be an explicit,
->   parent-gated, nothing-stored, opt-in setting — a separate decision, not MVP.
+> **DECIDED (John, 2026-07-09): ship (1) tap-melody echo + (2) in-aviary song
+> mimicry; defer (3) scripted phrase unlocks; (4) real mic input REJECTED
+> permanently** — mic capture violates the offline/no-permissions/
+> safe-for-a-6-year-old kids'-privacy line, and (1)+(2) deliver the mimicry
+> fantasy at zero privacy cost. (Writer's recommendation adopted.)
 
 ---
 
@@ -431,7 +416,7 @@ ENGINE_SPLIT §4 food strategies), with a couple of special cases.
 | `pellet` | Bird Pellets | 🟤 | all seed-eaters (the "healthy" food) | static in cup; higher `value` than seed (true — pellets are better nutrition) |
 | `mealworm` | Mealworms | 🪱 | canary (rearing), robin-types, **insectivores** | wiggles on floor (terrarium mealworm behavior reuse); live-food treat |
 | `nectar` | Nectar | 🍯 | **hummingbird, lorikeet/lorikeet-type** | drips into a nectar feeder; hover-feed (hummingbird) or lap (lorikeet) |
-| `mouse`/`chick` | (owl food) | 🍖 | **barn owl only** | see §5 owl + the terrarium snake-feeding toggle precedent |
+| `mouse`/`chick` | (owl food) | 🍖 | **barn owl only** | see §5 owl + the game-wide Nature-scenes parent setting |
 
 Nectar for lorikeets: yes — lorikeets are nectar/pollen specialists (true). If a
 lorikeet is in the roster (see §5 roster options), `nectar` is its diet and the
@@ -464,10 +449,11 @@ fully authored** in the exact `freshwater.js` schema.
 - `zone`: `'canopy' | 'mid-air' | 'ground' | 'nest'` (replaces top/mid/bottom;
   `zoneY()` maps `canopy`→upper flight zone/perches, `ground`→floor foragers).
 - `kind`: `'bird'` — selects the bird builder (§7).
-- `locomotion`: `'flight' | 'hover'` (aquarium infers from kind; aviary
-  declares it).
+- `locomotion`: `'flight'` for every bird (aquarium infers from kind; aviary
+  declares it). Hover is **not** a locomotion value — it is the `flight:
+  'hover'` variant flag below.
 - `flight`: `'flock' | 'solo' | 'hover'` — steering flavor (flock = boids on,
-  solo = boids off, hover = the sub-mode).
+  solo = boids off, hover = the variant flag).
 - `song`: a recipe id (§3) — new field, string.
 - Everything else — identical fields and types. `colors` hexes are true-to-life;
   facts are 3, kid-true, real.
@@ -557,7 +543,7 @@ export const AVIARY_SPECIES = [
       'A girl lovebird tucks strips of leaf and bark into her tail feathers to carry them home for the nest.',
       'They chatter to each other all day long and stay with the same partner for years.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'barn_owl', common: 'Barn Owl', scientific: 'Tyto alba',
@@ -580,7 +566,7 @@ export const AVIARY_SPECIES = [
     id: 'annas_hummingbird', common: "Anna's Hummingbird", scientific: 'Calypte anna',
     water: 'aviary', kind: 'bird', adultSizeCm: 10, bioload: 1, minSchool: 1,
     temperament: 'semi', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'mid-air', locomotion: 'hover', flight: 'hover', song: 'hummingbird',
+    tags: [], zone: 'mid-air', locomotion: 'flight', flight: 'hover', song: 'hummingbird',
     speed: 1.6, schooling: 'solo', diet: ['nectar'], price: 70,
     archetype: 'hummingbird', size: 0.5,
     colors: { base: '#3a9a5a', belly: '#e8e0d0', fin: '#4a9a60',
@@ -608,7 +594,7 @@ export const AVIARY_SPECIES = [
       'A single wild flock can have birds with black faces, red faces, or golden faces, all together.',
       'It nests inside hollow trees and its chicks have glowing blue beads at the corners of their mouths so parents can feed them in the dark.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
 ];
 ```
@@ -630,28 +616,19 @@ handles this correctly and honestly, no special-casing:
 This is a **taste decision, not a code problem** — the honesty engine already
 works. The question is what the *product* does with a 6-year-old's flock:
 
-> **DECISION FOR JOHN — owl-with-songbirds policy (RECOMMENDATION: (b) warn +
-> soft-separate, mirroring the terrarium snake-feeding toggle):**
-> - **(a) Full honesty (predation on):** the owl really can eat a finch
->   overnight. Maximally true, matches "ecosystems have rules," but a kid losing
->   a beloved finch to their own owl at 3am with no warning is harsh for this
->   audience. (The queen-death stakes in Ant Farm were opt-in-severe; this is
->   not opt-in.)
-> - **(b) Warn hard at purchase, then the owl "hunts" cosmetically but doesn't
->   kill tankmates by default** — a parent toggle ("Owl hunting", default off)
->   enables real predation for families who want it. Directly mirrors the
->   **decided** terrarium snake-feeding toggle pattern (parent toggle, matter-of-
->   fact default). Owl still eats its `mouse`/`chick` food on its own perch
->   (off-screen or matter-of-fact per the same 3-mode toggle). **Recommended.**
-> - **(c) Enclosure separation:** the owl is `soloOnly` **and** aviary-
->   incompatible with small songbirds — `rules.js` gets one extra check
->   blocking finches + owl in the same aviary ("a barn owl needs its own
->   aviary — it would hunt little birds"). Cleanest for safety, teaches a true
->   husbandry fact, but loses the mixed-aviary drama entirely.
+> **DECIDED (John, 2026-07-09): owl predation is governed by the game-wide
+> Nature-scenes parent setting — DEFAULT SHOWN, matter-of-fact, no gore;
+> off-screen event as the alternative.** The Nature-scenes law (ROADMAP
+> decisions log, 2026-07-09) puts ALL on-screen predation in every habitat
+> under one parent setting, superseding this spec's earlier off-by-default
+> lean — and the game does not treat stakes as opt-in (Ant Farm's queen death
+> is decided REAL stakes with big escalating warnings, ANTFARM_SPEC §3). The
+> purchase-time predator warning via `rules.js` (`evaluateAdd` + `canEat`)
+> stays exactly as specced above, so no kid is ambushed by the rule.
 
-The owl's own feeding (`mouse`/`chick`) reuses the **already-decided** terrarium
-snake-feeding parent toggle verbatim (shown / off-screen / substitute) — do not
-re-litigate that; inherit it.
+The owl's own feeding (`mouse`/`chick`) is governed by the **same game-wide
+Nature-scenes parent setting** (default shown matter-of-fact, no gore;
+alternative off-screen) — do not re-litigate that; inherit it.
 
 ---
 
@@ -709,15 +686,10 @@ staged and visible in the nest box).
    these are "different place after dark / at dawn" moments, the strongest
    version of the terrarium night-check-in.
 
-> **DECISION FOR JOHN — clutch frequency / population pressure:**
-> - **(a) Generous breeding** (birds pair and clutch readily): maximal babies-
->   loop delight, but bioload fills fast → the kid hits the cap and must manage
->   (rehome via the shop for coins? — needs a "rehome to the pet store" flow).
-> - **(b) Rare, milestone breeding** (a clutch is a special earned event,
->   gated on sustained good care + a nest box the kid buys): scarcer, more
->   precious, less population management. **Recommended for calm.**
-> - **(c) Player-initiated** ("Set up a nest box" is a deliberate action the kid
->   takes when ready): no surprise overpopulation, teaches intent.
+> **DECIDED (John, 2026-07-09): rare, milestone breeding.** A clutch is a
+> special earned event gated on sustained good care + a nest box the kid buys
+> — scarcer and more precious, with no population-management chores. (Writer's
+> recommendation adopted.)
 
 ---
 
@@ -826,28 +798,19 @@ tech before the expensive parts.
 - Hero birds only (per-agent), `maxAgents ≈ 24`.
 
 **Deferred past MVP:**
-- **Barn owl** (nocturnal predator + the cohabitation policy decision + owl
-  food toggle + `owl` archetype — its own milestone, and the "star" is worth
+- **Barn owl** (nocturnal predator + the decided §5 Nature-scenes predation
+  handling + `owl` archetype — its own milestone, and the "star" is worth
   waiting for).
-- **Hummingbird** (`hover` sub-mode + wing-blur + nectar feeder).
-- **Mimicry** (tap-echo + in-aviary — the whole §3 mimicry decision).
+- **Hummingbird** (`hover` variant flag + wing-blur + nectar feeder).
+- **Mimicry** (tap-echo + in-aviary, as decided in §3).
 - **Full nesting arc** (eggs → chicks → parent-feeding → fledge). MVP ships the
   pair-bond *look* (lovebirds perch together) as a teaser; the staged babies
   loop is the first post-MVP milestone.
 - **Crowd-flock InstancedMesh** ambience.
 - **Bath/plumage third meter**, mesh wall-cling, lorikeet + nectar.
 
-> **DECISION FOR JOHN — starter flight policy (clipped vs full flight):**
-> Real fledgling pet birds are sometimes wing-clipped so they can't fly far. In
-> the game this is a difficulty/onboarding lever:
-> - **(a) Full flight from day one** (recommended): the flight showpiece is the
->   whole point of the pack — clipping it hides the best tech. Realistic-not-
->   cartoon favors the free-flight aviary fantasy.
-> - **(b) "Clipped" starter, unlock free flight:** the first bird stays low /
->   hops more until the kid earns/buys a bigger flight cage — eases the landing
->   AI in gently and gives a progression beat. More conservative, teaches a real
->   (if debated) husbandry practice.
-> - **(c) Per-bird toggle** (a bird can be "flighted" or "clipped" as a care
->   choice): most flexible, but adds a husbandry concept a 6-year-old may not
->   need. Probably over-scoped.
+> **DECIDED (John, 2026-07-09): full flight from day one.** The flight
+> showpiece is the whole point of the pack — clipping it would hide the best
+> tech, and realistic-not-cartoon favors the free-flight aviary fantasy.
+> (Writer's recommendation adopted.)
 ```

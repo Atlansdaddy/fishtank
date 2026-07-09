@@ -12,6 +12,18 @@ game shippable; the aquarium is the reference pack and the regression test.
 > aquarium still passes, then merge to `main`. The 10-step checklist below is
 > the menu we pull steps from, not a phase to run up front.
 
+> **CANONICAL LOCOMOTION REGISTRY (2026-07-09, supersedes all per-spec
+> naming).** Engine module names and species `locomotion` field values are the
+> SAME strings. The full set: `swim` (fish, axolotl), `crawl` (floor walkers),
+> `climb` (glass/wall/branch), `sessile` (anemones; reef items bypass agents
+> entirely), `serpent` (snakes), `hop` (frogs), `flutter` (butterflies, moths,
+> fireflies' drift-flight), `flight` (birds; hover is a variant flag, not a
+> module), `jetcrawl` (octopus), `amphibious` (meta-mode that switches an agent
+> between a wet mode and a dry mode at the waterline). Deprecated aliases that
+> must not appear in specs: crawler, climber, hopper, swimmer, flyer, rester.
+> In-hive bees are `crawl` on the comb plane; their porch/foraging flight is a
+> pack system, not a locomotion mode.
+
 ## 1. What's already generic vs. aquarium-specific
 
 | Module (src/) | Verdict | Notes |

@@ -67,10 +67,12 @@ dig grid with a hexagonal lattice instead of a square one:
 
 ```js
 // comb.js
-export const COMB = { COLS: 80, ROWS: 48, CELL: 1.5, layout: 'flat-top' };
+export const HEXGRID = { COLS: 80, ROWS: 48, CELL: 1.5, layout: 'flat-top' };
 // ~3840 cells across the comb face (coarser than soil's 18k — comb cells read
 // bigger, and there are far fewer of them than soil voxels)
 // cell states (Uint8Array, COLS*ROWS):
+// (cell-state names live in their own enum; the grid dims above are HEXGRID so
+//  this COMB state and the grid object never collide as JS identifiers)
 const EMPTY = 0,          // no wax here yet
       COMB = 1,           // built empty wax cell (hexagon drawn, nothing inside)
       HONEY = 2,          // cell filling with nectar/honey (fill level in a paint pass)
@@ -175,7 +177,7 @@ means real colony growth. **All durations below are the true biological ones**
 
 | Stage | Real duration | Notes |
 |---|---|---|
-| **Queen** (bought/founding) | permanent | The one named pet (`ui.showFishCard` card, renameable via existing `onRename`). Her health = colony health. **DECIDED (mirrors ANTFARM, John 2026-07-08): real stakes.** Sustained severe neglect can kill her; the colony goes *queenless* — the marquee sad-but-teachable moment (a real hive without a queen winds down over days). Big escalating warnings first: "the hive sounds worried" audio shift, HUD queen-pill goes amber then red, a "your queen is weak" toast well before any death. Memorial card archives to the collection book; re-queening / a fresh founding swarm starts a new colony. The kid must never be surprised. |
+| **Queen** (bought/founding) | permanent | The one named pet (`ui.showFishCard` card, renameable via existing `onRename`). Her health = colony health. **DECIDED (John, 2026-07-08, mirrors ANTFARM): real death stakes with big escalating warnings (same as ant farm).** Sustained severe neglect can kill her; the colony goes *queenless* — the marquee sad-but-teachable moment (a real hive without a queen winds down over days). Big escalating warnings first: "the hive sounds worried" audio shift, HUD queen-pill goes amber then red, a "your queen is weak" toast well before any death. Memorial card archives to the collection book; re-queening / a fresh founding swarm starts a new colony. The kid must never be surprised. |
 | Egg | 3 days | Queen lays one upright egg per prepared brood cell; batch rate scales with stores + comb space + season. |
 | Larva | ~6 days | Must be fed constantly — **nurse bees visit ~1000×/day in real life**; game shows visible nurse traffic to open larval cells; larva fattens (fill level up). Underfed larvae stall (low stores). |
 | Capped brood (pupa) | ~12 days | Nurses cap the cell (COMB→CAPPED_BROOD); inert dome, no traffic. |
@@ -220,10 +222,10 @@ A flower meadow occupies the top strip (the ant farm's surface-strip slot).
 Foragers fly out the tube, visit painted flowers, return. Flowers deplete and
 refresh; more/better flowers = faster stores.
 
-- **Cost:** reuses the ant farm's surface-strip rendering and a **flyer**
-  locomotion (new but small — a 2D drifting flight over the strip, simpler than
-  the terrarium's ballistic hop; no gravity, gentle bob). Flowers are cheap
-  sprites. ~1 new locomotion module + flower props.
+- **Cost:** reuses the ant farm's surface-strip rendering and a small
+  **foraging-flight pack system** (not a new locomotion mode — a 2D drifting
+  flight over the strip, simpler than the terrarium's ballistic hop; no gravity,
+  gentle bob). Flowers are cheap sprites. ~1 new pack module + flower props.
 - **Pro:** you *see* the foraging, you see bees land on flowers (adorable,
   educational, defuses fear — "look, she's just visiting a flower"), and the
   meadow is a place the kid can improve (plant flowers = a care action / coin
@@ -238,7 +240,7 @@ little later carrying a visible pollen load (coloured leg baskets) or a
 nectar-swollen belly. The "field" is a number: a **forage-quality** value driven
 by season + weather + how many flowers the kid has "planted" in a menu.
 
-- **Cost:** *cheaper* — no meadow render, no flyer locomotion at all; foragers
+- **Cost:** *cheaper* — no meadow render, no foraging-flight system at all; foragers
   are just comb-walkers that despawn at the tube and respawn with cargo. The
   waggle dance (below) still happens **on the comb**, which is where it really
   happens anyway.
@@ -248,13 +250,13 @@ by season + weather + how many flowers the kid has "planted" in a menu.
 - **Con:** less to *watch*; loses the "bee on a flower" postcard image that does
   the most fear-defusing work.
 
-> **DECISION FOR JOHN — where foraging happens.** This is a taste/product call,
-> not a tech one (both are affordable; B is cheaper). Options:
-> (a) **On-screen meadow** — max charm and fear-defusing, small new flyer code;
-> (b) **Off-screen tube** — cheapest, truest-to-scale, comb is the whole show;
-> (c) **Hybrid** — off-screen field *quality*, but a shallow "porch" in front of
-> the tube where returning foragers land and unload on-screen for a beat before
-> entering (most of A's charm at most of B's cost). My lean: **(c)**.
+> **DECIDED (John, 2026-07-09): (c) hybrid porch.** The field's *quality* stays
+> an off-screen number (truest to scale, cheapest), but returning foragers land
+> on a shallow **porch** in front of the tube and unload their pollen baskets
+> on-screen for a beat before entering — most of Option A's charm at most of
+> Option B's cost, and a lovely little reveal each trip. An occasional meadow
+> cutaway can be added later. (The porch/forage flight is a pack system, not a
+> locomotion mode.)
 
 ### The waggle dance (ships regardless of A/B/C — it happens ON the comb)
 
@@ -305,7 +307,7 @@ pack config — until then, semantic mapping, exactly like TERRARIUM §2):
 | `tank.water` (quality 1→0) | **Stores / Nectar** | Colony food = sum of HONEY + CAPPED_HONEY + POLLEN fill across the comb. Drops as brood and adults eat (hourly draw, faster in winter, faster with more brood). Refilled by foraging (§4) OR by the kid's **sugar-water feeder** (`waterChange()` → `feedSugar()`, +0.55). Low stores stalls laying and larvae; sustained-low in winter risks the cluster. Decays toward 0 at a `STORES_DECAY_DAYS` tuning (≈ 2 foreground, faster than water's 9 — feeding/foraging is the ritual). |
 | `tank.algae` (0→1) | **Hive debris / pest risk** | Dead bees, wax cappings, and mould accumulate on the glass and bottom board at an `ALGAE_DAYS`-style rate; the existing wipe gesture (`sim.scrubAlgae(0.015)` per pointermove + sparkles, `main.js`) clears it unchanged. Left too long: **wax-moth / small-hive-beetle** speckle creeps in from the corners (a real hive pest — the ant farm's mould analogue) and stores drain slightly faster. |
 | hunger/health per fish | **Queen health + brood viability** | `summary()` maps: `avgHealth` = queen/colony health; `hungriest` = stores emptiness. HUD pills work unchanged. Queen weak → the escalating-warning ladder in §3. |
-| — (new, optional) | **Hive climate** | New meter `tank.temp` (0 cold → 1 hot, ~0.55 ideal). Brood needs a warm, stable nest (~35°C in real life — a fact). Driven by season/`df` + entrance setting + colony size: too cold chills brood (laying slows, dev stalls); too hot and the colony **beards** (bees hang outside the tube — a paintable, non-scary "it's hot, they're cooling off" moment). The kid manages it with the entrance and, in winter, by not over-opening. **Deferrable to v2** like the terrarium's temp meter — MVP can run climate as visual-only. |
+| — (new, optional) | **Hive climate** | New meter `tank.temp` (0 cold → 1 hot, ~0.55 ideal). Brood needs a warm, stable nest (~35°C in real life — a fact). Driven by season/`df` + entrance setting + colony size: too cold chills brood (laying slows, dev stalls); too hot and the colony **beards** (bees hang outside the tube — a paintable, non-scary "it's hot, they're cooling off" moment). The kid manages it with the entrance and, in winter, by not over-opening. **DECIDED (John, 2026-07-09): deferred to v2, visual-only** (like the terrarium's temp meter) — MVP paints bearding/clustering but runs no real climate mechanic. |
 | Rotting food pollution | Robbing / dearth events | Uneaten sugar syrup left out during a dearth can trigger a **robbing** surprise (§7) rather than polluting — cute + true; the fix is to close the entrance down. |
 | — (derived) | **Colony mood / hum** | Not stored: f(stores, climate, debris, recent disturbances). Drives bee walk speed, forager traffic density, and the ambient **hive hum** (audio.js: a warm, calm bee-hum bed whose pitch/density tracks mood — a queenless or hungry colony *sounds* different, a real beekeeper's tell and a gorgeous calm-app audio moment). |
 
@@ -313,7 +315,7 @@ pack config — until then, semantic mapping, exactly like TERRARIUM §2):
 `['fresh','salt']` today (ENGINE_SPLIT §6 step 1 makes the subtype list config).
 Stores are consumed, brood advances a stage or two, comb grows, honey ripens and
 gets capped, foragers bank the day's nectar — then a **reveal card** on open
-(same as ANTFARM §8): *"While you were away: the colony built 40 new cells,
+(same as ANTFARM §7): *"While you were away: the colony built 40 new cells,
 capped its first honey, and 22 new bees hatched,"* camera slowly panning the new
 comb before control unlocks. Deterministic-enough coarse ticks
 (`OFFLINE_CAP_HOURS = 96`), a few ms of JS on load.
@@ -343,23 +345,21 @@ important bee idea: *a hive is one animal made of three kinds of body.*
    real-world conservation story (most bees are solitary and don't sting — the
    ultimate fear-defuser).
 
-> **DECISION FOR JOHN — collection direction.** Options:
-> (a) **Honeybee-only, deep** — ship castes + subspecies variants of the one
-> comb hive; every other bee is a fact card, not a habitat. Cheapest, most
-> focused, all tech reuse.
-> (b) **Honeybee + bumblebee + solitary tubes** — three distinct hive types
-> (comb / bumble box / tube nest). Richest collection and the strongest "not all
-> bees sting" teaching, but the solitary-tube nest is a second (small) grid
-> model to build.
-> (c) **Staged: (a) at launch, (b) as the v2/v3 content drop** — honeybee comb
-> hive first (it *is* the ant-farm sibling), bumble + solitary added later like
-> the ant farm's carpenter/leafcutter v2 species. My lean: **(c)**.
+> **DECIDED (John, 2026-07-09): (c) staged.** Ship the honeybee comb hive deep
+> first — castes + subspecies variants of the one comb hive (it *is* the
+> ant-farm sibling, all tech reuse) — then add bumblebees and solitary bees as
+> later content drops, like the ant farm's carpenter/leafcutter v2 species.
+> Rationale: richest collection over time without blocking launch on a second
+> (bumble-box / tube) nest grid.
 
 Below, **7 fully-authored entries in the exact `src/species/freshwater.js`
 schema**, with bee-appropriate deltas consistent with how TERRARIUM_SPEC did it:
 `water:'hive'`; `kind:'bee'`; `zone:'comb' | 'meadow' | 'nest'`;
-`locomotion:'comb' | 'flyer'` (comb-walk reuses the crawler/climber surface
-walker on the hex grid; flyer is the §4 gentle 2D flight); new `role` field for
+`locomotion:'crawl' | 'flutter'` — in-hive honeybees are `crawl` on the comb
+plane (reusing the engine `crawl` surface walker on the hex grid); the
+non-honeybee bees (bumble / solitary) use `flutter` for their gentle drift
+flight. **Honeybee foraging flight is a pack system, not a locomotion mode**
+(§4), so it never appears in this field. New `role` field for
 caste; new `nectar` comfort band (0–1) reusing the humidity-meter slot;
 `bioload` reads as "space/forage demand." Colours are true to life; facts are
 true and kid-read-aloud.
@@ -368,10 +368,10 @@ true and kid-read-aloud.
 export const BEEHIVE_SPECIES = [
   {
     id: 'honeybee_queen', common: 'Honeybee Queen', scientific: 'Apis mellifera',
-    water: 'hive', kind: 'bee', role: 'queen', adultSizeCm: 2, bioload: 0, minSchool: 1,
+    water: 'hive', kind: 'bee', role: 'queen', adultSizeCm: 2, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['soloOnly'], zone: 'comb', locomotion: 'comb', nectar: 0.5,
-    speed: 0.4, schooling: 'none', diet: ['royaljelly'], price: 120,
+    tags: ['soloOnly'], zone: 'comb', locomotion: 'crawl', nectar: 0.5,
+    speed: 0.4, schooling: 'solo', diet: ['royaljelly'], price: 120,
     archetype: 'bee', size: 1.6, shape: { height: 1.0, finFlow: 1.2 },
     colors: { base: '#c88a2a', belly: '#8a5a1a', fin: '#3a2a12',
       pattern: 'stripesV', patternColor: '#3a2a12', patternScale: 1.1, iridescence: 0.25 },
@@ -381,13 +381,13 @@ export const BEEHIVE_SPECIES = [
       'A queen can live four or five years, while her worker daughters live only a few weeks.',
       'The workers feed her a special food called royal jelly her entire life — that is what made her a queen.'
     ],
-    care: 'Moderate'
+    care: 'Medium'
   },
   {
     id: 'honeybee_worker', common: 'Worker Honeybee', scientific: 'Apis mellifera',
     water: 'hive', kind: 'bee', role: 'worker', adultSizeCm: 1.3, bioload: 1, minSchool: 20,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'comb', locomotion: 'comb', nectar: 0.5,
+    tags: [], zone: 'comb', locomotion: 'crawl', nectar: 0.5,
     speed: 0.9, schooling: 'tight', diet: ['nectar', 'pollen'], price: 0,
     archetype: 'bee', size: 1.0,
     colors: { base: '#d8a838', belly: '#8a5a1a', fin: '#2a2018',
@@ -404,7 +404,7 @@ export const BEEHIVE_SPECIES = [
     id: 'honeybee_drone', common: 'Drone Honeybee', scientific: 'Apis mellifera',
     water: 'hive', kind: 'bee', role: 'drone', adultSizeCm: 1.6, bioload: 1, minSchool: 4,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'comb', locomotion: 'comb', nectar: 0.5,
+    tags: [], zone: 'comb', locomotion: 'crawl', nectar: 0.5,
     speed: 0.7, schooling: 'loose', diet: ['nectar'], price: 0,
     archetype: 'bee', size: 1.2, shape: { height: 1.2, finFlow: 1.0 },
     colors: { base: '#b8862a', belly: '#6a4416', fin: '#1a1410',
@@ -421,8 +421,8 @@ export const BEEHIVE_SPECIES = [
     id: 'buff_tailed_bumblebee', common: 'Buff-Tailed Bumblebee', scientific: 'Bombus terrestris',
     water: 'hive', kind: 'bee', role: 'queen', adultSizeCm: 2.2, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: ['soloOnly'], zone: 'nest', locomotion: 'flyer', nectar: 0.4,
-    speed: 0.6, schooling: 'none', diet: ['nectar', 'pollen'], price: 40,
+    tags: ['soloOnly'], zone: 'nest', locomotion: 'flutter', nectar: 0.4,
+    speed: 0.6, schooling: 'solo', diet: ['nectar', 'pollen'], price: 40,
     archetype: 'bumblebee', size: 1.5, shape: { height: 1.4, finFlow: 1.0 },
     colors: { base: '#1a1410', belly: '#e8d038', fin: '#f0ead8',
       pattern: 'stripesV', patternColor: '#e8d038', patternScale: 1.6, iridescence: 0.1 },
@@ -438,8 +438,8 @@ export const BEEHIVE_SPECIES = [
     id: 'red_mason_bee', common: 'Red Mason Bee', scientific: 'Osmia bicornis',
     water: 'hive', kind: 'bee', role: 'solitary', adultSizeCm: 1.1, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'nest', locomotion: 'flyer', nectar: 0.4,
-    speed: 0.8, schooling: 'none', diet: ['nectar', 'pollen'], price: 18,
+    tags: [], zone: 'nest', locomotion: 'flutter', nectar: 0.4,
+    speed: 0.8, schooling: 'solo', diet: ['nectar', 'pollen'], price: 18,
     archetype: 'solitarybee', size: 0.8,
     colors: { base: '#7a3418', belly: '#a85028', fin: '#c87848',
       pattern: 'none', patternColor: '#ffffff', patternScale: 1.0, iridescence: 0.15 },
@@ -455,8 +455,8 @@ export const BEEHIVE_SPECIES = [
     id: 'leafcutter_bee', common: 'Leafcutter Bee', scientific: 'Megachile centuncularis',
     water: 'hive', kind: 'bee', role: 'solitary', adultSizeCm: 1.0, bioload: 1, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'nest', locomotion: 'flyer', nectar: 0.4,
-    speed: 0.8, schooling: 'none', diet: ['nectar', 'pollen'], price: 18,
+    tags: [], zone: 'nest', locomotion: 'flutter', nectar: 0.4,
+    speed: 0.8, schooling: 'solo', diet: ['nectar', 'pollen'], price: 18,
     archetype: 'solitarybee', size: 0.8,
     colors: { base: '#2a2620', belly: '#6a6250', fin: '#8a8068',
       pattern: 'stripesV', patternColor: '#b0a888', patternScale: 1.2, iridescence: 0.2 },
@@ -472,8 +472,8 @@ export const BEEHIVE_SPECIES = [
     id: 'carpenter_bee', common: 'Eastern Carpenter Bee', scientific: 'Xylocopa virginica',
     water: 'hive', kind: 'bee', role: 'solitary', adultSizeCm: 2.3, bioload: 2, minSchool: 1,
     temperament: 'peaceful', predator: false, finNipper: false, longFins: false,
-    tags: [], zone: 'nest', locomotion: 'flyer', nectar: 0.4,
-    speed: 0.7, schooling: 'none', diet: ['nectar', 'pollen'], price: 22,
+    tags: [], zone: 'nest', locomotion: 'flutter', nectar: 0.4,
+    speed: 0.7, schooling: 'solo', diet: ['nectar', 'pollen'], price: 22,
     archetype: 'bumblebee', size: 1.4, shape: { height: 1.3, finFlow: 1.0 },
     colors: { base: '#181410', belly: '#241e18', fin: '#3a3a44',
       pattern: 'none', patternColor: '#ffffff', patternScale: 1.0, iridescence: 0.5 },
@@ -490,7 +490,23 @@ export const BEEHIVE_SPECIES = [
 
 (Worker and drone `price: 0` — they aren't bought, they're *born* from the
 colony; they populate the collection book automatically the first time the hive
-rears one. The queen is the purchase, as in the ant farm.)
+rears one. The queen is the purchase, as in the ant farm. Her `bioload` is
+written as **1**, not 0: the engine coerces a falsy bioload to 1 anyway
+(`spec.bioload || 1`, `src/rules.js:17` and `src/sim.js:96`), so a literal 0
+would silently become 1 — we author 1 to match what the sim actually runs.)
+
+### Foods
+
+The `diet` ids above resolve to this foods table (same column shape as
+TERRARIUM_SPEC §2 — `id`, label, `behavior`, notes). Only the sugar-water
+feeder is a player-dropped food; the rest are colony-internal / forage-borne:
+
+| id | Shown as | behavior | Notes |
+|---|---|---|---|
+| `sugarwater` | Sugar-Water Feeder | `drip` | The one player-dropped food (§5 `feedSugar()`) — a jar feeder the foragers drink from like the ant farm's honey trophallaxis. Tops up **Stores** (+0.55) when forage is poor. |
+| `nectar` | Nectar | — (forage-borne) | Not player-dropped; foragers bring it in (§4) and receivers deposit it as HONEY. The everyday food of workers, drones, and foragers. |
+| `pollen` | Pollen | — (forage-borne) | Not player-dropped; foragers carry it in leg baskets and nurses pack it as POLLEN "bee bread." The protein source for brood and young workers. |
+| `royaljelly` | Royal Jelly | — (in-colony) | Never a player food; nurse bees secrete it to feed the queen for life and every very young larva. It is what turns a larva into a queen. |
 
 ## 7. The four retention mechanics, made concrete
 
@@ -530,20 +546,11 @@ Every habitat ships all four (HABITAT_VISION). The bee hive's versions:
 coin-earning slot). This is the bee hive's signature economy and it needs a
 gentleness framing:
 
-> **DECISION FOR JOHN — honey harvest framing.** Taking honey from your pet
-> colony could read as taking their food. Options:
-> (a) **"Sharing the extra"** — the game only ever lets you harvest *surplus*
-> capped honey the colony doesn't need for winter; a clear "leave enough for
-> the bees" line on the harvest UI, and the colony refills it. Teaches
-> responsible, real beekeeping (good keepers never over-harvest). Never any
-> colony harm.
-> (b) **No literal harvest — honey is a health readout only**; coins come from
-> pollination jobs / selling nothing, and honey is purely the colony's own food
-> and a satisfying full-comb sight. Zero extraction guilt.
-> (c) **Kid-choice** — a gentle prompt each time ("Take a little honey to
-> share, or leave it all for the bees?"), both valid, honesty about the trade.
-> My lean: **(a)** — it's the real, teachable, guilt-free version and it keeps
-> the coin loop.
+> **DECIDED (John, 2026-07-09): (a) "share the surplus".** The game only ever
+> lets the kid harvest *surplus* capped honey the colony doesn't need for
+> winter — a clear "leave enough for the bees" line on the harvest UI, and the
+> colony refills it. Never any colony harm. Rationale: it's the real, teachable,
+> guilt-free version of the mechanic and it keeps the coin loop intact.
 
 ## 8. Performance budget (S24, 60 fps, alongside DOM UI)
 
@@ -556,7 +563,7 @@ the comb is *cheaper* to render than soil (fewer, larger cells).
 | **Crowd bees** | up to ~400 visual | NOT simulated: fuzzy bee-sprite particles advected along the comb flow fields with noise (a Points/InstancedMesh, 1 draw call). Density per comb region = statistical population there — a busy brood nest *looks* busy. This is what sells "thousands of bees" cheaply, same trick as the ant farm's corridor crowd. |
 | **Comb** | 2 quads + 1 canvas repaint per cell change | §2.3 |
 | **Flow fields** | BFS on ~3840 cells, only on comb change, amortized | §2.5 — cheaper than the ant farm's 18k soil cells |
-| **Meadow / foragers** (Option A/C only) | ≤ ~16 flyer bees over the strip | gentle 2D flight, no gravity; cheapest locomotion in the game. Option B spends **zero** here. |
+| **Meadow / foragers** (Option A/C only) | ≤ ~16 forager bees over the strip | gentle 2D flight, no gravity; the forage-flight **pack system** (not a locomotion module), cheaper than any locomotion mode. Option B spends **zero** here. |
 | **Waggle dance** | 1 scripted figure-8 + a few `watch`ers | parametric path, negligible |
 | **Hive hum** | one warm oscillator bed, params from mood | audio.js, negligible |
 | **LOD** | zoomed out: heroes freeze to simple loops, crowd density is the show; zoomed in on a hero (follow-cam): its neighbours within 15 cm get full leg/antenna/wing animation | tap-to-follow reuses `cam.follow` |
@@ -581,7 +588,7 @@ the three honeybee-caste collection entries.
 
 **Out (v2+):** drones + drone eviction; reared new queens + **swarming / second
 hive** (the big v2 beat — it's the structural-growth headliner but needs the
-second-tank plumbing); on-screen meadow + flyer locomotion + planting flowers;
+second-tank plumbing); on-screen meadow + forage-flight pack + planting flowers;
 crowd-bee layer; climate meter as a real mechanic + bearding; robbing events;
 wax-moth/beetle pest; subspecies queens; bumblebee + solitary-bee hive types
 (§6 direction (c)); seasons as a full real-clock cycle (MVP fakes season as a
@@ -625,15 +632,11 @@ requirement, not flavour. How the game does it:
   their queen and watched their hive build honey is not afraid of bees anymore —
   that transformation *is the product's reason to exist.*
 
-> **DECISION FOR JOHN — fear-framing intensity.** How hard to lean the
-> onboarding on fear-defusing. Options:
-> (a) **Solitary-bee-first onboarding** — the app's first bee is a gentle
-> stingerless solitary bee / bumblebee, and the honeybee colony is unlocked once
-> the kid is comfortable; maximum gentleness, slight delay to the hero comb hive.
-> (b) **Colony-first, safety-framed** — open straight on the beautiful glass
-> observation hive with the "you're safe at the window" and hum framing doing the
-> work; strongest first impression, trusts the framing.
-> (c) **Parent-set comfort toggle** — a one-time "is your child nervous about
-> bees?" that picks (a) or (b). My lean: **(b)** with the solitary bees very
-> prominent early, and (c) if it's cheap.
+> **DECIDED (John, 2026-07-09): (b) colony-first, safety-framed.** Open straight
+> on the beautiful glass observation hive and let the "you're safe at the
+> window" + calm-hum framing do the work, with the stingless **drones** (and the
+> solitary bees) spotlighted prominently early as fear-defusers. Add the
+> one-time **parent comfort toggle** (c) if it's cheap. Rationale: strongest
+> first impression, and it trusts the framing that is the product's reason to
+> exist.
 ```
