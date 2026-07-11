@@ -56,7 +56,7 @@ Plus real species, true colors, real facts, husbandry-accurate care.
 
 | Habitat | Roster |
 |---|---|
-| Aquarium | 178 authored (76 fresh fish, 58 salt fish, 44 inverts) |
+| Aquarium | 202 authored (76 fresh + 58 salt + 24 fish2, 44 inverts) |
 | Terrarium | 30 authored in spec |
 | Ant Farm | species-of-ant list TBD (harvester colony first, per spec §MVP) |
 | All others | rosters authored per-habitat when its build starts (subagents against `SPECIES_SPEC.md`, same as always) |
@@ -91,6 +91,9 @@ Plus real species, true colors, real facts, husbandry-accurate care.
 - Bee Hive bundle: hybrid porch foraging (tube exit, visible loaded returns),
   "share the surplus" honey harvest, colony-first safety onboarding with
   stingless drones spotlighted, staged collection (honeybees deep first).
-- **All other flagged decisions: writers' recommendations adopted** — each
-  spec's DECISION FOR JOHN blocks are being stamped DECIDED accordingly; John
-  can overturn any individually later.
+- **All other flagged decisions: writers' recommendations adopted** — every
+  spec's decision blocks are stamped DECIDED accordingly; John can overturn
+  any individually later. Canonical locomotion registry lives in
+  ENGINE_SPLIT.md; care ratings are Easy/Medium/Hard only; species ids are
+  owned by exactly one pack (luna moth → Butterfly Garden; fire-bellied toad
+  + land hermit crab → Paludarium).

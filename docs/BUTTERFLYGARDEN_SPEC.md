@@ -353,9 +353,13 @@ Deltas applied consistently (mirrors the terrarium's schema deltas):
 - `water: 'garden'`; `kind: 'lep'` (selects the butterfly builder).
 - `zone`: `'canopy' | 'flowers' | 'ground'` (where it prefers to fly/perch;
   `zoneY()` maps `canopy`→upper third, `flowers`→mid, `ground`→low).
-- `locomotion: 'flutter'` for all adults (the crawler/chrysalis stages are
-  driven by `stage`, not `locomotion`).
-- New `host`: the caterpillar's food plant id. New `nightShift: true` for moths.
+- `locomotion: 'flutter'` for all adults; the caterpillar stage runs the canon
+  `crawl` module and the egg/chrysalis stages are static — the stage machine,
+  not `locomotion`, drives which mode is active.
+- New `host`: the caterpillar's food plant id. Moths carry `'nightShift'` (and,
+  where true, `'nomouth'`) as **`tags`**, not schema fields — matching the
+  authored data below; the day/night system reads the tag to hand the garden
+  over after dark.
 - `wingspanCm` reuses the `adultSizeCm` slot (it IS the size that matters).
 - `colors.iridescence` — the schema already has it — carries the blue morpho
   and swallowtail shimmer. Pattern uses the existing `PATTERN_ID` set.
@@ -508,6 +512,10 @@ export const BUTTERFLY_SPECIES = [
 > `'nectar'`. All other hexes are true-to-life; verify against a photo when
 > authoring the full 20.
 
+> **`luna_moth` id ownership:** this pack OWNS the `luna_moth` species id. The
+> Firefly Jar pack's duplicate `luna_moth` is being removed, so the Butterfly
+> Garden is its single canonical home.
+
 ---
 
 ## 7. The four retention mechanics — made concrete
@@ -533,12 +541,23 @@ hard question**.
    shift takeover (moths appear when the kid's room goes dark, §6); a butterfly
    landing on the tap point.
 
-### THE HARD QUESTION — adult lifespan and death **[DECISION FOR JOHN]**
+### THE HARD QUESTION — adult lifespan and death
 
-Adult butterflies really live days to weeks; moths like the atlas/luna live
-about a week with no mouth. The aquarium has honest death stakes from *care
-failure*. Here, **death is not a failure — it is the lifecycle itself**, and a
-6-year-old will feel it. This is a values call. Three options:
+> **DECIDED (John, 2026-07-09): Option A — full generational cycle.** Adults age
+> on the real clock and, before a gentle fade, healthy well-fed adults lay eggs
+> on the matching host plant so the garden self-renews; the collection book
+> celebrates each generation raised. *Rationale:* highest educational value and
+> the true lifecycle, and eggs-before-death is the engine of the retention loop.
+> The Option-C parent toggle is **not** added as a separate softening mechanism —
+> death presentation everywhere (the gentle fade, no gore) is governed by the
+> game-wide Nature-scenes / calm-no-gore standard (ROADMAP 2026-07-09), so a
+> per-habitat toggle would be redundant.
+
+Context that produced the decision — adult butterflies really live days to
+weeks; moths like the atlas/luna live about a week with no mouth. The aquarium
+has honest death stakes from *care failure*. Here, **death is not a failure — it
+is the lifecycle itself**, and a 6-year-old will feel it. The three options
+weighed:
 
 - **Option A — Full honest generational cycle.** Adults age on the real clock
   (`ADULT_LIFE_DAYS` per species: painted lady ~2 wks, atlas ~1 wk). Before
@@ -561,18 +580,25 @@ failure*. Here, **death is not a failure — it is the lifecycle itself**, and a
   *Teaches:* families choose their own readiness; consistent with the toggle
   precedent already set for snake feeding.
 
-Recommendation to surface, not decide: **C defaulting to A** — honest by
-default, softenable, and consistent with how John already handled the snake.
-Whichever is chosen, eggs-before-death (self-renewal) is what keeps the garden
-from emptying out and is the engine of the retention loop; strongly keep it.
+(Eggs-before-death self-renewal is what keeps the garden from emptying out and
+is the engine of the retention loop — retained regardless.)
 
-### Resident mantis predator **[DECISION FOR JOHN]**
+### Resident mantis predator
 
-ROADMAP names a "resident mantis". A mantis in a butterfly garden eats
-butterflies — biologically true, and it rides the existing
-`predator`/`canEat`/`_findPrey` path for free (a mantis striking a resting
-butterfly is exactly `Swarm._devour`). But it turns the calm garden into a
-place where your raised pet gets eaten. Options:
+> **DECIDED (John, 2026-07-09): Option B — mantis eats only free feeder insects,
+> never named butterflies.** The resident mantis hunts the free feeder insects /
+> fruit flies (`canEat` restricted to `kind:'feeder'`) and never touches the
+> collection the kid raised. *Rationale:* keeps the nature-is-real predator
+> flavor without grief over a lost pet. Its on-screen eating is governed by the
+> game-wide Nature-scenes parent toggle (ROADMAP 2026-07-09): default shown,
+> matter-of-fact, no gore.
+
+Context that produced the decision — ROADMAP names a "resident mantis". A mantis
+in a butterfly garden eats butterflies — biologically true, and it rides the
+existing `predator`/`canEat`/`_findPrey` path for free (a mantis striking a
+resting butterfly is exactly `Swarm._devour`). But left unrestricted it turns
+the calm garden into a place where your raised pet gets eaten. The options
+weighed:
 
 - **A — No predator.** Keep the garden purely calm; drop the mantis. Safest for
   the 6-year-old audience and the "calm" pillar.
@@ -584,8 +610,6 @@ place where your raised pet gets eaten. Options:
   butterfly (rare, telegraphed, no gore); off by default, a toggle like snake
   feeding. Teaches food webs honestly; risks the calm.
 
-Recommendation to surface: **B** — keeps the predator flavor and a genuine
-nature-is-real moment without eating the pet the kid spent a week raising.
 
 ---
 
@@ -600,11 +624,11 @@ keep them shader-driven and instanced.
 | Wing rendering | **2 quads per butterfly, vertex-shader flap** | Each adult = a body sprite/prism + two textured wing quads hinged at the body; flap is a `sin(t*beatHz)` **vertex** rotation about the hinge in the shader — no CPU skinning, no per-frame geometry. `wingOpen` (bask) and `unfurl` (eclosure) are two more uniforms on the same material. |
 | Wing iridescence (morpho/swallowtail) | view-angle tint, **no extra passes** | Reuse the fish `iridescence` shader chunk: a fresnel-driven hue shift in the fragment shader (`dot(viewDir, normal)`), gated by `colors.iridescence`. Blue morpho's flash is this term turned to 0.95. Zero new render targets. |
 | Wing scales / pattern | the existing `PATTERN_ID` set | Same pattern shader as fish/herps; the wing quad UVs sample it. No unique textures per species. |
-| Caterpillars / chrysalises | cheap | Caterpillars: existing crawler + a short segmented body (invertkit-style, like the millipede). Chrysalis: one teardrop mesh with a `translucency`/`unfurl` uniform. A dozen at once is nothing. |
+| Caterpillars / chrysalises | cheap | Caterpillars: existing `crawl` locomotion + a short segmented body (invertkit-style, like the millipede). Chrysalis: one teardrop mesh with a `translucency`/`unfurl` uniform. A dozen at once is nothing. |
 | Instancing option | if a species crowd grows | If a "butterfly release" moment ever puts 60+ identical-species adults up, batch them into one `InstancedMesh` with per-instance flap phase + wander seed (the Aviary will want this anyway; spec'd here as the growth path, not MVP). |
 | Netting | **procedural shader, 3 quads** (walls) | §1 — analytic, moiré-safe, no texture sampling, no mipmaps. Effectively free. |
 | Plants | billboarded flower cards + a few 3D leaves | `bloom`/`leafArea`/`eaten` are uniforms, not geometry edits. Chew decals are shader masks. |
-| Shadows | off (as aquarium) | Dappled-light quad fakes the depth cue. |
+| Shadows | one directional shadow (as aquarium) | The aquarium already casts agent shadows (`renderer.shadowMap` in `src/main.js:58-74`; `castShadow` in `fishbuilder.js:298,319`, `invertbuilder.js:148`) — keep that single directional shadow for the flying adults so they read as grounded, and let the dappled-light quad add the canopy depth cue on top. No new shadow tech. |
 
 Offline catch-up: on `applyOffline()`, advance every `lep` record's stage
 progress in coarse steps (capped at `OFFLINE_CAP_HOURS`), mark ripe chrysalises
@@ -628,15 +652,15 @@ Monarch is ready to emerge — tap to watch") that feeds the eclosure show queue
 | Meters: **nectar + net cleanliness** (humidity/misting deferred) | daily action, reuses waterChange + scrubAlgae |
 | Foods: `nectar`, `fruit`, `sugarwater`, `hostplant` | adult + caterpillar feeding |
 | Collection book: species card + "raised from egg" seal + generation counter | retention mechanic #3 |
-| Adult lifespan + eggs-before-death self-renewal, per the **DECISION FOR JOHN** (default C→A) | keeps the garden alive; the hard question resolved before ship |
+| Adult lifespan + eggs-before-death self-renewal, per the **DECIDED** full generational cycle (§7, Option A) | keeps the garden alive; the hard question resolved before ship |
 | Butterfly builder: archetypes `butterfly` + `moth`; iridescence reuse | the visuals |
 | **6–8 flagship species** (§6.1): monarch, blue morpho, tiger & black swallowtail, painted lady, zebra longwing, atlas moth, luna moth | day + night shift, the milkweed/no-mouth/iridescence stories |
 
 **Out (v2):**
 
 - Humidity/misting meter (lamp-style visual only in MVP).
-- Resident mantis predator (ships once the **DECISION FOR JOHN** lands; likely
-  Option B).
+- Resident mantis predator (**DECIDED** Option B — feeder-insects only; ships
+  post-MVP, §7).
 - Puddling behavior + `minerals` food, pollen-feeding longevity (zebra longwing).
 - Hummingbird hawk-moth hover flight (a flutter-flight showcase, but its
   stationary-hover kinematics deserve their own milestone — and it's a natural
